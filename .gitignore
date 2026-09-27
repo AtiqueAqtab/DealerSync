@@ -398,4 +398,19 @@ FodyWeavers.xsd
 *.msp
 
 # JetBrains Rider
+.idea/
 *.sln.iml
+
+# Real dealership data
+data/
+
+# Environment / secrets
+.env
+appsettings.Development.json
+
+# Python
+__pycache__/
+.venv/
+
+# macOS
+.DS_Store

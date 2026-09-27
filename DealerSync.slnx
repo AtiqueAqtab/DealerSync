@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/DealerSync.Api/DealerSync.Api.csproj" />
+    <Project Path="backend/DealerSync.Core/DealerSync.Core.csproj" />
+    <Project Path="backend/DealerSync.Infrastructure/DealerSync.Infrastructure.csproj" />
+    <Project Path="backend/DealerSync.Tests/DealerSync.Tests.csproj" />
+  </Folder>
+</Solution>
