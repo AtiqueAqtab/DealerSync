@@ -20,6 +20,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DealerSync.Core\DealerSync.Core.csproj" />
+    <ProjectReference Include="..\DealerSync.Infrastructure\DealerSync.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\samples\lightspeed_inventory_sample.csv" Link="samples\lightspeed_inventory_sample.csv" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
