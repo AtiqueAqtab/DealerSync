@@ -235,4 +235,183 @@ public class SkuMatchingServiceTests
 
         Assert.Null(results[0].ShopifyItem);
     }
+    
+    [Fact]
+    public void ReconcileShopify_ShouldLeaveUnknownShopifySkuUnmatched()
+    {
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Quantity = 5
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "NOT-IN-LIGHTSPEED",
+                CurrentQuantity = 2
+            }
+        };
+
+        var results = _service.ReconcileShopify(
+            lightspeedItems,
+            shopifyItems);
+
+        Assert.Single(results);
+        Assert.Equal(SkuMatchType.Unmatched, results[0].MatchType);
+        Assert.Null(results[0].LightspeedItem);
+        Assert.Equal("NOT-IN-LIGHTSPEED", results[0].ShopifyItem?.Sku);
+    }
+    
+    [Fact]
+    public void GetInventoryUpdates_ShouldOnlyReturnChangedMatchedItems()
+    {
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new() { PartNumber = "ABC-001", Quantity = 5 },
+            new() { PartNumber = "ABC-002", Quantity = 3 },
+            new() { PartNumber = "ABC-003", Quantity = 8 }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "ABC-001",
+                Title = "Product One",
+                Location = "Ottawa",
+                CurrentQuantity = 2
+            },
+            new()
+            {
+                Sku = "ABC-002",
+                Title = "Product Two",
+                Location = "Ottawa",
+                CurrentQuantity = 3
+            }
+        };
+
+        var matches = _service.ReconcileShopify(
+            lightspeedItems,
+            shopifyItems);
+
+        var updates = _service.GetInventoryUpdates(matches);
+
+        Assert.Single(updates);
+
+        Assert.Equal("ABC-001", updates[0].Sku);
+        Assert.Equal(2, updates[0].CurrentQuantity);
+        Assert.Equal(5, updates[0].NewQuantity);
+    }
+    
+    [Fact]
+    public void GetInventoryUpdates_ShouldCollapseIdenticalDuplicates()
+    {
+        var lightspeedItem = new LightspeedInventoryItem
+        {
+            PartNumber = "TEST-001",
+            Quantity = 5
+        };
+
+        var shopifyItem = new ShopifyInventoryItem
+        {
+            Sku = "TEST-001",
+            Title = "Test Product",
+            Location = "Ottawa",
+            CurrentQuantity = 2
+        };
+
+        var matches = new List<InventoryMatch>
+        {
+            new()
+            {
+                LightspeedItem = lightspeedItem,
+                ShopifyItem = shopifyItem,
+                MatchType = SkuMatchType.Exact
+            },
+            new()
+            {
+                LightspeedItem = lightspeedItem,
+                ShopifyItem = shopifyItem,
+                MatchType = SkuMatchType.Exact
+            }
+        };
+
+        var updates = _service.GetInventoryUpdates(matches);
+
+        Assert.Single(updates);
+        Assert.Equal("TEST-001", updates[0].Sku);
+        Assert.Equal(5, updates[0].NewQuantity);
+    }
+    
+    [Fact]
+    public void GetInventoryUpdates_ShouldRejectConflictingDuplicates()
+    {
+        var shopifyItem = new ShopifyInventoryItem
+        {
+            Sku = "TEST-001",
+            Title = "Test Product",
+            Location = "Ottawa",
+            CurrentQuantity = 2
+        };
+
+        var matches = new List<InventoryMatch>
+        {
+            new()
+            {
+                LightspeedItem = new LightspeedInventoryItem
+                {
+                    PartNumber = "TEST-001",
+                    Quantity = 5
+                },
+                ShopifyItem = shopifyItem,
+                MatchType = SkuMatchType.Exact
+            },
+            new()
+            {
+                LightspeedItem = new LightspeedInventoryItem
+                {
+                    PartNumber = "TEST-001",
+                    Quantity = 7
+                },
+                ShopifyItem = shopifyItem,
+                MatchType = SkuMatchType.Exact
+            }
+        };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            _service.GetInventoryUpdates(matches));
+    }
+    
+    [Fact]
+    public void GetInventoryUpdates_ShouldExcludeNegativeLightspeedQuantity()
+    {
+        var matches = new List<InventoryMatch>
+        {
+            new()
+            {
+                LightspeedItem = new LightspeedInventoryItem
+                {
+                    PartNumber = "TEST-001",
+                    Quantity = -1
+                },
+                ShopifyItem = new ShopifyInventoryItem
+                {
+                    Sku = "TEST-001",
+                    Title = "Test Product",
+                    Location = "Ottawa",
+                    CurrentQuantity = 2
+                },
+                MatchType = SkuMatchType.Exact
+            }
+        };
+
+        var updates = _service.GetInventoryUpdates(matches);
+
+        Assert.Empty(updates);
+    }
 }
