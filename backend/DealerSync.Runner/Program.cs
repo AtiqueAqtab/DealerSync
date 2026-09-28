@@ -1,11 +1,10 @@
 ﻿using System.Text;
 using DealerSync.Core.Enums;
-using DealerSync.Core.Services;
 using DealerSync.Infrastructure.Exporters;
-using DealerSync.Infrastructure.Importers;
+using DealerSync.Infrastructure.Services;
 
 // ------------------------------------------------------------
-// Validate command-line arguments
+// Validate arguments
 // ------------------------------------------------------------
 
 if (args.Length != 2)
@@ -33,102 +32,35 @@ if (!File.Exists(shopifyFile))
 }
 
 // ------------------------------------------------------------
-// Create services
+// Run reconciliation
 // ------------------------------------------------------------
 
-var lightspeedImporter = new LightspeedCsvImporter();
-var shopifyImporter = new ShopifyCsvImporter();
-var matchingService = new SkuMatchingService();
+Console.WriteLine("Running inventory reconciliation...");
+
+var reconciliationService = new ReconciliationService();
+
+var result = reconciliationService.Run(
+    lightspeedFile,
+    shopifyFile);
 
 // ------------------------------------------------------------
-// Import inventory data
-// ------------------------------------------------------------
-
-Console.WriteLine("Importing Lightspeed inventory...");
-var lightspeedItems = lightspeedImporter.Import(lightspeedFile);
-
-Console.WriteLine("Importing Shopify inventory...");
-var shopifyItems = shopifyImporter.Import(shopifyFile);
-
-// ------------------------------------------------------------
-// Lightspeed -> Shopify reconciliation
-// ------------------------------------------------------------
-
-Console.WriteLine("Reconciling inventory...");
-
-var results = matchingService.Reconcile(
-    lightspeedItems,
-    shopifyItems);
-
-var exactMatches = results.Count(
-    result => result.MatchType == SkuMatchType.Exact);
-
-var normalizedMatches = results.Count(
-    result => result.MatchType == SkuMatchType.Normalized);
-
-var unmatched = results.Count(
-    result => result.MatchType == SkuMatchType.Unmatched);
-
-var inventoryDifferences = results.Count(
-    result =>
-        result.ShopifyItem != null &&
-        result.HasInventoryDifference);
-
-// ------------------------------------------------------------
-// Shopify -> Lightspeed reconciliation
-// ------------------------------------------------------------
-
-var shopifyResults = matchingService.ReconcileShopify(
-    lightspeedItems,
-    shopifyItems);
-
-var shopifyExact = shopifyResults.Count(
-    result => result.MatchType == SkuMatchType.Exact);
-
-var shopifyNormalized = shopifyResults.Count(
-    result => result.MatchType == SkuMatchType.Normalized);
-
-var shopifyUnmatched = shopifyResults.Count(
-    result => result.MatchType == SkuMatchType.Unmatched);
-
-var shopifyMatched =
-    shopifyExact + shopifyNormalized;
-
-var coverage = shopifyItems.Count == 0
-    ? 0
-    : (double)shopifyMatched / shopifyItems.Count * 100;
-
-// ------------------------------------------------------------
-// Find negative Lightspeed quantities
-// ------------------------------------------------------------
-
-var negativeQuantityMatches = shopifyResults
-    .Where(result =>
-        result.MatchType != SkuMatchType.Unmatched &&
-        result.LightspeedItem != null &&
-        result.ShopifyItem != null &&
-        result.HasInventoryDifference &&
-        result.LightspeedItem.Quantity < 0)
-    .ToList();
-
-// ------------------------------------------------------------
-// Generate safe inventory updates
-// ------------------------------------------------------------
-
-var inventoryUpdates =
-    matchingService.GetInventoryUpdates(shopifyResults);
-
-// ------------------------------------------------------------
-// Generate diagnostic reports
+// Create output directories
 // ------------------------------------------------------------
 
 var diagnosticsDirectory = Path.Combine(
     "data",
     "diagnostics");
 
-Directory.CreateDirectory(diagnosticsDirectory);
+var outputDirectory = Path.Combine(
+    "data",
+    "output");
 
-// Unmatched Shopify report
+Directory.CreateDirectory(diagnosticsDirectory);
+Directory.CreateDirectory(outputDirectory);
+
+// ------------------------------------------------------------
+// Export unmatched Shopify diagnostics
+// ------------------------------------------------------------
 
 var unmatchedFile = Path.Combine(
     diagnosticsDirectory,
@@ -142,11 +74,11 @@ using (var writer = new StreamWriter(
     writer.WriteLine(
         "SKU,Title,Location,CurrentQuantity");
 
-    foreach (var result in shopifyResults
-                 .Where(result =>
-                     result.MatchType == SkuMatchType.Unmatched))
+    foreach (var match in result.Matches
+                 .Where(match =>
+                     match.MatchType == SkuMatchType.Unmatched))
     {
-        var item = result.ShopifyItem;
+        var item = match.ShopifyItem;
 
         if (item == null)
             continue;
@@ -159,38 +91,9 @@ using (var writer = new StreamWriter(
     }
 }
 
-// Lightspeed diagnostic report
-
-var lightspeedDiagnosticFile = Path.Combine(
-    diagnosticsDirectory,
-    "lightspeed_inventory.csv");
-
-using (var writer = new StreamWriter(
-           lightspeedDiagnosticFile,
-           false,
-           Encoding.UTF8))
-{
-    writer.WriteLine(
-        "PartNumber,Description,Quantity");
-
-    foreach (var item in lightspeedItems)
-    {
-        writer.WriteLine(
-            $"{EscapeCsv(item.PartNumber)}," +
-            $"{EscapeCsv(item.Description)}," +
-            $"{item.Quantity}");
-    }
-}
-
 // ------------------------------------------------------------
-// Generate Shopify inventory update CSV
+// Export Shopify inventory update CSV
 // ------------------------------------------------------------
-
-var outputDirectory = Path.Combine(
-    "data",
-    "output");
-
-Directory.CreateDirectory(outputDirectory);
 
 var updateFile = Path.Combine(
     outputDirectory,
@@ -200,10 +103,10 @@ var exporter = new ShopifyInventoryCsvExporter();
 
 exporter.Export(
     updateFile,
-    inventoryUpdates);
+    result.InventoryUpdates);
 
 // ------------------------------------------------------------
-// Console summary
+// Display summary
 // ------------------------------------------------------------
 
 Console.WriteLine();
@@ -211,77 +114,52 @@ Console.WriteLine("DealerSync Inventory Reconciliation");
 Console.WriteLine("-----------------------------------");
 
 Console.WriteLine(
-    $"Lightspeed items:       {lightspeedItems.Count:N0}");
+    $"Lightspeed items:       {result.LightspeedItemCount:N0}");
 
 Console.WriteLine(
-    $"Shopify variants:       {shopifyItems.Count:N0}");
+    $"Shopify variants:       {result.ShopifyItemCount:N0}");
 
 Console.WriteLine();
 
-Console.WriteLine(
-    $"Exact matches:          {exactMatches:N0}");
-
-Console.WriteLine(
-    $"Normalized matches:     {normalizedMatches:N0}");
-
-Console.WriteLine(
-    $"Unmatched:              {unmatched:N0}");
-
-Console.WriteLine();
-
-Console.WriteLine(
-    $"Inventory differences:  {inventoryDifferences:N0}");
-
-// ------------------------------------------------------------
-// Shopify coverage
-// ------------------------------------------------------------
-
-Console.WriteLine();
 Console.WriteLine("Shopify Match Coverage");
 Console.WriteLine("----------------------");
 
 Console.WriteLine(
-    $"Exact:                  {shopifyExact:N0}");
+    $"Exact:                  {result.ExactMatches:N0}");
 
 Console.WriteLine(
-    $"Normalized:             {shopifyNormalized:N0}");
+    $"Normalized:             {result.NormalizedMatches:N0}");
 
 Console.WriteLine(
-    $"Unmatched:              {shopifyUnmatched:N0}");
+    $"Unmatched:              {result.Unmatched:N0}");
 
 Console.WriteLine(
-    $"Coverage:               {coverage:F2}%");
-
-// ------------------------------------------------------------
-// Inventory update summary
-// ------------------------------------------------------------
+    $"Coverage:               {result.ShopifyCoverage:F2}%");
 
 Console.WriteLine();
+
 Console.WriteLine("Shopify Inventory Update");
 Console.WriteLine("------------------------");
 
 Console.WriteLine(
-    $"Inventory updates generated: {inventoryUpdates.Count:N0}");
+    $"Inventory differences:        {result.InventoryDifferences:N0}");
 
 Console.WriteLine(
-    $"Negative quantities excluded: {negativeQuantityMatches.Count:N0}");
+    $"Inventory updates generated:  {result.InventoryUpdatesGenerated:N0}");
 
 Console.WriteLine(
-    $"Output file: {updateFile}");
-
-// ------------------------------------------------------------
-// Diagnostic file locations
-// ------------------------------------------------------------
+    $"Negative quantities excluded: {result.NegativeQuantitiesExcluded:N0}");
 
 Console.WriteLine();
-Console.WriteLine("Diagnostics");
-Console.WriteLine("-----------");
+
+Console.WriteLine("Output");
+Console.WriteLine("------");
 
 Console.WriteLine(
-    $"Unmatched Shopify report: {unmatchedFile}");
+    $"Shopify update file: {updateFile}");
 
 Console.WriteLine(
-    $"Lightspeed report: {lightspeedDiagnosticFile}");
+    $"Unmatched report:    {unmatchedFile}");
 
 // ------------------------------------------------------------
 // CSV helper
