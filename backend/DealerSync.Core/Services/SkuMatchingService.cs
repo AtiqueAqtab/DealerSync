@@ -48,37 +48,62 @@ public class SkuMatchingService
         var results = new List<InventoryMatch>();
         var shopifyList = shopifyItems.ToList();
 
+        // Build lookup tables once.
+        var exactLookup = shopifyList
+            .Where(item => !string.IsNullOrWhiteSpace(item.Sku))
+            .GroupBy(
+                item => item.Sku,
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First(),
+                StringComparer.OrdinalIgnoreCase);
+
+        var normalizedLookup = shopifyList
+            .Where(item => !string.IsNullOrWhiteSpace(item.Sku))
+            .GroupBy(item => NormalizeSku(item.Sku))
+            .Where(group => !string.IsNullOrWhiteSpace(group.Key))
+            .ToDictionary(
+                group => group.Key,
+                group => group.First());
+
         foreach (var lightspeedItem in lightspeedItems)
         {
-            var shopifyItem = shopifyList.FirstOrDefault(item =>
-                string.Equals(
+            ShopifyInventoryItem? shopifyItem = null;
+            var matchType = SkuMatchType.Unmatched;
+
+            // Exact match
+            if (exactLookup.TryGetValue(
                     lightspeedItem.PartNumber,
-                    item.Sku,
-                    StringComparison.OrdinalIgnoreCase));
-
-            var matchType = SkuMatchType.Exact;
-
-            if (shopifyItem == null)
+                    out var exactMatch))
             {
-                var normalizedLightspeed =
+                shopifyItem = exactMatch; 
+                matchType = SkuMatchType.Exact;
+            }
+            else
+            {
+               // Normalized match
+               var normalizedPartNumber =
                     NormalizeSku(lightspeedItem.PartNumber);
 
-                shopifyItem = shopifyList.FirstOrDefault(item =>
-                    NormalizeSku(item.Sku) == normalizedLightspeed);
-
-                matchType = shopifyItem != null
-                    ? SkuMatchType.Normalized
-                    : SkuMatchType.Unmatched;
+                if (!string.IsNullOrWhiteSpace(normalizedPartNumber) &&
+                    normalizedLookup.TryGetValue(
+                        normalizedPartNumber, 
+                        out var normalizedMatch)) 
+                { 
+                    shopifyItem = normalizedMatch; 
+                    matchType = SkuMatchType.Normalized; 
+                } 
             }
-
-            results.Add(new InventoryMatch
-            {
+            
+            results.Add(new InventoryMatch 
+            { 
                 LightspeedItem = lightspeedItem,
                 ShopifyItem = shopifyItem,
-                MatchType = matchType
+                MatchType = matchType 
             });
         }
-
+        
         return results;
     }
 }

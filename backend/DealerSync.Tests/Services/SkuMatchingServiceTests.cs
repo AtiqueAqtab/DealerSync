@@ -202,4 +202,37 @@ public class SkuMatchingServiceTests
 
         Assert.Null(results[0].ShopifyItem);
     }
+    
+    [Fact]
+    public void Reconcile_ShouldNotMatchBlankSkus()
+    {
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "",
+                Quantity = 5
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "",
+                CurrentQuantity = 5
+            }
+        };
+
+        var results = _service.Reconcile(
+            lightspeedItems,
+            shopifyItems);
+
+        Assert.Single(results);
+        Assert.Equal(
+            SkuMatchType.Unmatched,
+            results[0].MatchType);
+
+        Assert.Null(results[0].ShopifyItem);
+    }
 }
