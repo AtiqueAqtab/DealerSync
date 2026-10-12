@@ -1,4 +1,6 @@
 using DealerSync.Infrastructure.Services;
+using DealerSync.Core.Services;
+using DealerSync.Infrastructure.Importers;
 
 namespace DealerSync.Tests.Services;
 
@@ -26,7 +28,11 @@ public class ReconciliationServiceTests
                 TEST-001,Test Product,Ottawa,2
                 """);
 
-            var service = new ReconciliationService();
+            var service = new ReconciliationService(
+                new LightspeedCsvImporter(),
+                new ShopifyCsvImporter(),
+                new SkuMatchingService()
+            );
 
             var result = service.Run(
                 lightspeedFile,

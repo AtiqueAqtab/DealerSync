@@ -1,4 +1,14 @@
+using DealerSync.Core.Services;
+using DealerSync.Infrastructure.Importers;
+using DealerSync.Infrastructure.Services;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Register reconciliation dependencies
+builder.Services.AddTransient<LightspeedCsvImporter>();
+builder.Services.AddTransient<ShopifyCsvImporter>();
+builder.Services.AddTransient<SkuMatchingService>();
+builder.Services.AddTransient<ReconciliationService>();
 
 // Register API services
 builder.Services.AddOpenApi();
@@ -25,5 +35,17 @@ app.MapGet("/api/health", () =>
     })
     .WithName("GetHealth")
     .WithTags("Health");
+
+app.MapGet("/api/reconciliation/status",
+        (ReconciliationService service) =>
+        {
+            return Results.Ok(new
+            {
+                Status = "Ready",
+                Message = "Reconciliation service resolved successfully"
+            });
+        })
+    .WithName("GetReconciliationStatus")
+    .WithTags("Reconciliation");
 
 app.Run();

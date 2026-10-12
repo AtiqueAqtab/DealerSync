@@ -11,11 +11,14 @@ public class ReconciliationService
     private readonly ShopifyCsvImporter _shopifyImporter;
     private readonly SkuMatchingService _matchingService;
 
-    public ReconciliationService()
+    public ReconciliationService(
+        LightspeedCsvImporter lightspeedImporter,
+        ShopifyCsvImporter shopifyImporter,
+        SkuMatchingService matchingService)
     {
-        _lightspeedImporter = new LightspeedCsvImporter();
-        _shopifyImporter = new ShopifyCsvImporter();
-        _matchingService = new SkuMatchingService();
+        _lightspeedImporter = lightspeedImporter;
+        _shopifyImporter = shopifyImporter;
+        _matchingService = matchingService;
     }
 
     public ReconciliationResult Run(
