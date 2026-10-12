@@ -252,8 +252,15 @@ public class SkuMatchingServiceTests
         {
             new()
             {
-                Sku = "NOT-IN-LIGHTSPEED",
-                CurrentQuantity = 2
+                Sku = "KLIM-001",
+                Location = "Main",
+                CurrentQuantity = 3
+            },
+            new()
+            {
+                Sku = "UNKNOWN-001",
+                Location = "Main",
+                CurrentQuantity = 5
             }
         };
 
@@ -261,10 +268,18 @@ public class SkuMatchingServiceTests
             lightspeedItems,
             shopifyItems);
 
-        Assert.Single(results);
-        Assert.Equal(SkuMatchType.Unmatched, results[0].MatchType);
-        Assert.Null(results[0].LightspeedItem);
-        Assert.Equal("NOT-IN-LIGHTSPEED", results[0].ShopifyItem?.Sku);
+        // Both Shopify products should appear in the results
+        Assert.Equal(2, results.Count);
+
+        // First product: exact match
+        Assert.Equal(SkuMatchType.Exact, results[0].MatchType);
+        Assert.Equal("KLIM-001", results[0].ShopifyItem?.Sku);
+        Assert.NotNull(results[0].LightspeedItem);
+
+        // Second product: unmatched
+        Assert.Equal(SkuMatchType.Unmatched, results[1].MatchType);
+        Assert.Equal("UNKNOWN-001", results[1].ShopifyItem?.Sku);
+        Assert.Null(results[1].LightspeedItem);
     }
     
     [Fact]
@@ -544,5 +559,113 @@ public class SkuMatchingServiceTests
         Assert.Equal(
             5,
             matches[0].LightspeedItem!.Quantity);
+    }
+    
+    [Fact]
+    public void ReconcileShopify_DuplicateSkuAndLocation_ThrowsException()
+    {
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Quantity = 5
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "Main",
+                CurrentQuantity = 3
+            },
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "Main",
+                CurrentQuantity = 4
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("KLIM-001", exception.Message);
+    }
+    
+    [Fact]
+    public void ReconcileShopify_MultipleLocations_ThrowsException()
+    {
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Quantity = 5
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "Ottawa",
+                CurrentQuantity = 3
+            },
+            new()
+            {
+                Sku = "KLIM-002",
+                Location = "Toronto",
+                CurrentQuantity = 2
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("Multiple Shopify locations", exception.Message);
+    }
+    
+    [Fact]
+    public void ReconcileShopify_MissingLocation_ThrowsException()
+    {
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Quantity = 5
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "",
+                CurrentQuantity = 3
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("missing locations", exception.Message);
     }
 }

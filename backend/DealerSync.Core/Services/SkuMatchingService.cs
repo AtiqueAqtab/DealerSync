@@ -111,6 +111,53 @@ public class SkuMatchingService
         IEnumerable<LightspeedInventoryItem> lightspeedItems,
         IEnumerable<ShopifyInventoryItem> shopifyItems)
     {
+        var shopifyList = shopifyItems.ToList();
+        
+        // Validate Shopify inventory locations
+        var inventoryItems = shopifyList
+            .Where(item => !string.IsNullOrWhiteSpace(item.Sku))
+            .ToList();
+
+        // Reject missing locations
+        if (inventoryItems.Any(item =>
+                string.IsNullOrWhiteSpace(item.Location)))
+        {
+            throw new InvalidOperationException(
+                "Shopify inventory contains records with missing locations.");
+        }
+
+        // Identify distinct locations
+        var locations = inventoryItems
+            .Select(item => item.Location.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // DealerSync currently supports one Shopify location
+        if (locations.Count > 1)
+        {
+            throw new InvalidOperationException(
+                "Multiple Shopify locations detected. " +
+                "DealerSync currently supports one inventory location.");
+        }
+
+        var duplicateShopifyRecords = shopifyList
+            .Where(item => !string.IsNullOrWhiteSpace(item.Sku))
+            .GroupBy(item => new
+            {
+                Sku = item.Sku.Trim().ToUpperInvariant(),
+                Location = item.Location.Trim().ToUpperInvariant()
+            })
+            .FirstOrDefault(group => group.Count() > 1);
+
+        if (duplicateShopifyRecords != null)
+        {
+            var duplicate = duplicateShopifyRecords.First();
+
+            throw new InvalidOperationException(
+                $"Duplicate Shopify inventory record detected for " +
+                $"SKU '{duplicate.Sku}' at location '{duplicate.Location}'.");
+        }
+        
         var lightspeedList = lightspeedItems
             .Where(item => !string.IsNullOrWhiteSpace(item.PartNumber))
             .ToList();
@@ -150,7 +197,7 @@ public class SkuMatchingService
 
         var results = new List<InventoryMatch>();
 
-        foreach (var shopifyItem in shopifyItems)
+        foreach (var shopifyItem in shopifyList)
         {
             LightspeedInventoryItem? lightspeedItem = null;
             var matchType = SkuMatchType.Unmatched;
