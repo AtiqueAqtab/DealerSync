@@ -414,4 +414,135 @@ public class SkuMatchingServiceTests
 
         Assert.Empty(updates);
     }
+    
+    [Fact]
+    public void ReconcileShopify_DuplicateLightspeedSku_ThrowsException()
+    {
+        // Arrange
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Description = "Adventure Jacket",
+                Quantity = 5
+            },
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Description = "Adventure Jacket",
+                Quantity = 8
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Title = "Adventure Jacket",
+                Location = "Ottawa",
+                CurrentQuantity = 3
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        // Act & Assert
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("KLIM-001", exception.Message);
+    }
+    
+    [Fact]
+    public void ReconcileShopify_AmbiguousNormalizedSku_ThrowsException()
+    {
+        // Arrange
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Description = "Adventure Jacket",
+                Quantity = 5
+            },
+            new()
+            {
+                PartNumber = "KLIM001",
+                Description = "Different Jacket",
+                Quantity = 8
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM_001",
+                Title = "Adventure Jacket",
+                Location = "Ottawa",
+                CurrentQuantity = 3
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        // Act & Assert
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("KLIM_001", exception.Message);
+    }
+    
+    [Fact]
+    public void ReconcileShopify_ExactMatchWithNormalizedCollision_Succeeds()
+    {
+        // Arrange
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Quantity = 5
+            },
+            new()
+            {
+                PartNumber = "KLIM001",
+                Quantity = 8
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "Ottawa",
+                CurrentQuantity = 3
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        // Act
+        var matches = service.ReconcileShopify(
+            lightspeedItems,
+            shopifyItems);
+
+        // Assert
+        Assert.Single(matches);
+
+        Assert.Equal(
+            SkuMatchType.Exact,
+            matches[0].MatchType);
+
+        Assert.Equal(
+            5,
+            matches[0].LightspeedItem!.Quantity);
+    }
 }

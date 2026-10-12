@@ -114,6 +114,23 @@ public class SkuMatchingService
         var lightspeedList = lightspeedItems
             .Where(item => !string.IsNullOrWhiteSpace(item.PartNumber))
             .ToList();
+        
+        // Detect duplicate Lightspeed part numbers
+        var duplicateLightspeedSkus = lightspeedList
+            .GroupBy(
+                item => item.PartNumber,
+                StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .ToList();
+
+        if (duplicateLightspeedSkus.Count > 0)
+        {
+            var duplicateSku = duplicateLightspeedSkus[0].Key;
+
+            throw new InvalidOperationException(
+                $"Duplicate Lightspeed part number detected: " +
+                $"'{duplicateSku}'. Reconciliation cannot continue.");
+        }
 
         var exactLookup = lightspeedList
             .GroupBy(
@@ -129,7 +146,7 @@ public class SkuMatchingService
             .Where(group => !string.IsNullOrWhiteSpace(group.Key))
             .ToDictionary(
                 group => group.Key,
-                group => group.First());
+                group => group.ToList());
 
         var results = new List<InventoryMatch>();
 
@@ -153,9 +170,18 @@ public class SkuMatchingService
 
                     if (normalizedLookup.TryGetValue(
                             normalizedSku,
-                            out var normalizedMatch))
+                            out var normalizedMatches))
                     {
-                        lightspeedItem = normalizedMatch;
+                        // Reject ambiguous normalized matches
+                        if (normalizedMatches.Count > 1)
+                        {
+                            throw new InvalidOperationException(
+                                $"Ambiguous normalized SKU match for " +
+                                $"Shopify SKU '{shopifyItem.Sku}'. " +
+                                $"Multiple Lightspeed part numbers match.");
+                        }
+
+                        lightspeedItem = normalizedMatches[0];
                         matchType = SkuMatchType.Normalized;
                     }
                 }
