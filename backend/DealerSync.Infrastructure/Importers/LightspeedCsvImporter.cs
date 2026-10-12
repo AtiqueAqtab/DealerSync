@@ -41,7 +41,9 @@ public class LightspeedCsvImporter
                     CultureInfo.InvariantCulture,
                     out var quantity))
             {
-                continue;
+                throw new FormatException(
+                    $"Invalid quantity '{quantityText}' for part number " +
+                    $"'{partNumber}' at CSV row {csv.Parser.Row}.");
             }
 
             records.Add(new LightspeedInventoryItem

@@ -41,7 +41,9 @@ public class ShopifyCsvImporter
                     CultureInfo.InvariantCulture,
                     out var quantity))
             {
-                continue;
+                throw new FormatException(
+                    $"Invalid quantity '{quantityText}' for SKU " +
+                    $"'{sku}' at CSV row {csv.Parser.Row}.");
             }
 
             records.Add(new ShopifyInventoryItem

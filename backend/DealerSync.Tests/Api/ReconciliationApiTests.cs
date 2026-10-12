@@ -186,6 +186,62 @@ public class ReconciliationApiTests
             HttpStatusCode.BadRequest,
             response.StatusCode);
     }
+    [Fact]
+    public async Task Reconciliation_InvalidShopifyQuantity_ReturnsBadRequest()
+    {
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            "ABC123,Test Product,10\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            "ABC123,Test Product,Main,invalid\n";
+
+        using var content = CreateMultipartContent(
+            lightspeedCsv,
+            shopifyCsv);
+
+        var response = await _client.PostAsync(
+            "/api/reconciliation",
+            content);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+
+        var responseBody = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("Invalid quantity", responseBody);
+        Assert.Contains("ABC123", responseBody);
+    }
+    [Fact]
+    public async Task Reconciliation_InvalidLightspeedQuantity_ReturnsBadRequest()
+    {
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            "ABC123,Test Product,invalid\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            "ABC123,Test Product,Main,7\n";
+
+        using var content = CreateMultipartContent(
+            lightspeedCsv,
+            shopifyCsv);
+
+        var response = await _client.PostAsync(
+            "/api/reconciliation",
+            content);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+
+        var responseBody = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("Invalid quantity", responseBody);
+        Assert.Contains("ABC123", responseBody);
+    }
 
 
     private static MultipartFormDataContent CreateMultipartContent(

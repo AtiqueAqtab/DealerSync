@@ -97,6 +97,13 @@ public static class ReconciliationEndpoints
                         Error = "The uploaded CSV files contain invalid CSV data or headers."
                     });
                 }
+                catch (FormatException ex)
+                {
+                    return Results.BadRequest(new
+                    {
+                        Error = ex.Message
+                    });
+                }
                 catch (InvalidOperationException)
                 {
                     return Results.BadRequest(new
