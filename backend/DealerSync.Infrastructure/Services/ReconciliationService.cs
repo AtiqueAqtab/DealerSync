@@ -21,15 +21,27 @@ public class ReconciliationService
         _matchingService = matchingService;
     }
 
+    // Used by the CLI — accepts file paths
     public ReconciliationResult Run(
         string lightspeedFile,
         string shopifyFile)
     {
+        using var lightspeedReader = new StreamReader(lightspeedFile);
+        using var shopifyReader = new StreamReader(shopifyFile);
+
+        return Run(lightspeedReader, shopifyReader);
+    }
+
+    // Used by the API — accepts readers
+    public ReconciliationResult Run(
+        TextReader lightspeedReader,
+        TextReader shopifyReader)
+    {
         var lightspeedItems =
-            _lightspeedImporter.Import(lightspeedFile);
+            _lightspeedImporter.Import(lightspeedReader);
 
         var shopifyItems =
-            _shopifyImporter.Import(shopifyFile);
+            _shopifyImporter.Import(shopifyReader);
 
         var matches = _matchingService.ReconcileShopify(
             lightspeedItems,
@@ -62,8 +74,7 @@ public class ReconciliationService
         var inventoryUpdates =
             _matchingService.GetInventoryUpdates(matches);
 
-        var matched =
-            exactMatches + normalizedMatches;
+        var matched = exactMatches + normalizedMatches;
 
         var coverage = shopifyItems.Count == 0
             ? 0
@@ -80,11 +91,8 @@ public class ReconciliationService
 
             InventoryDifferences = inventoryDifferences,
 
-            InventoryUpdatesGenerated =
-                inventoryUpdates.Count,
-
-            NegativeQuantitiesExcluded =
-                negativeQuantitiesExcluded,
+            InventoryUpdatesGenerated = inventoryUpdates.Count,
+            NegativeQuantitiesExcluded = negativeQuantitiesExcluded,
 
             ShopifyCoverage = coverage,
 

@@ -6,10 +6,20 @@ namespace DealerSync.Infrastructure.Importers;
 
 public class LightspeedCsvImporter
 {
+    // Used by the CLI
     public List<LightspeedInventoryItem> Import(string filePath)
     {
         using var reader = new StreamReader(filePath);
-        using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
+        return Import(reader);
+    }
+
+    // Used by the API and CLI
+    public List<LightspeedInventoryItem> Import(TextReader reader)
+    {
+        using var csv = new CsvReader(
+            reader,
+            CultureInfo.InvariantCulture,
+            leaveOpen: true);
 
         var records = new List<LightspeedInventoryItem>();
 
@@ -25,13 +35,20 @@ public class LightspeedCsvImporter
 
             var quantityText = csv.GetField("Qty");
 
-            if (!int.TryParse(quantityText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var quantity))
+            if (!int.TryParse(
+                    quantityText,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var quantity))
+            {
                 continue;
+            }
 
             records.Add(new LightspeedInventoryItem
             {
                 PartNumber = partNumber.Trim(),
-                Description = csv.GetField("Description")?.Trim() ?? string.Empty,
+                Description = csv.GetField("Description")?.Trim()
+                              ?? string.Empty,
                 Quantity = quantity
             });
         }
