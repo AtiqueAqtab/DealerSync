@@ -1,6 +1,8 @@
 ﻿using System.Text;
 using DealerSync.Core.Enums;
+using DealerSync.Core.Services;
 using DealerSync.Infrastructure.Exporters;
+using DealerSync.Infrastructure.Importers;
 using DealerSync.Infrastructure.Services;
 
 // ------------------------------------------------------------
@@ -37,7 +39,11 @@ if (!File.Exists(shopifyFile))
 
 Console.WriteLine("Running inventory reconciliation...");
 
-var reconciliationService = new ReconciliationService();
+var reconciliationService = new ReconciliationService(
+    new LightspeedCsvImporter(),
+    new ShopifyCsvImporter(),
+    new SkuMatchingService()
+);
 
 var result = reconciliationService.Run(
     lightspeedFile,

@@ -1,4 +1,5 @@
 using DealerSync.Infrastructure.Importers;
+using Xunit;
 
 namespace DealerSync.Tests.Importers;
 
@@ -33,5 +34,20 @@ public class LightspeedCsvImporterTests
 
         Assert.Equal("TRIUMPH-004", items[3].PartNumber);
         Assert.Equal(0, items[3].Quantity);
+    }
+    
+    [Fact]
+    public void Import_InvalidQuantity_ThrowsFormatException()
+    {
+        var csv =
+            "Part Number,Description,Qty\n" +
+            "ABC123,Test Product,invalid\n";
+
+        using var reader = new StringReader(csv);
+
+        var importer = new LightspeedCsvImporter();
+
+        Assert.Throws<FormatException>(() =>
+            importer.Import(reader));
     }
 }

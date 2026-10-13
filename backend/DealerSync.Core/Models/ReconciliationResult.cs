@@ -9,8 +9,12 @@ public class ReconciliationResult
     public int ShopifyItemCount { get; set; }
 
     public int ExactMatches { get; set; }
+    
+    public int VerifiedMatches { get; set; }
 
     public int NormalizedMatches { get; set; }
+
+    public int NormalizedUpdatesExcluded { get; set; }
 
     public int Unmatched { get; set; }
 

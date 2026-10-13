@@ -1,6 +1,7 @@
 using DealerSync.Core.Enums;
 using DealerSync.Core.Models;
 using DealerSync.Core.Services;
+using Xunit;
 
 namespace DealerSync.Tests.Services;
 
@@ -202,7 +203,7 @@ public class SkuMatchingServiceTests
 
         Assert.Null(results[0].ShopifyItem);
     }
-    
+
     [Fact]
     public void Reconcile_ShouldNotMatchBlankSkus()
     {
@@ -235,7 +236,7 @@ public class SkuMatchingServiceTests
 
         Assert.Null(results[0].ShopifyItem);
     }
-    
+
     [Fact]
     public void ReconcileShopify_ShouldLeaveUnknownShopifySkuUnmatched()
     {
@@ -252,8 +253,15 @@ public class SkuMatchingServiceTests
         {
             new()
             {
-                Sku = "NOT-IN-LIGHTSPEED",
-                CurrentQuantity = 2
+                Sku = "KLIM-001",
+                Location = "Main",
+                CurrentQuantity = 3
+            },
+            new()
+            {
+                Sku = "UNKNOWN-001",
+                Location = "Main",
+                CurrentQuantity = 5
             }
         };
 
@@ -261,12 +269,20 @@ public class SkuMatchingServiceTests
             lightspeedItems,
             shopifyItems);
 
-        Assert.Single(results);
-        Assert.Equal(SkuMatchType.Unmatched, results[0].MatchType);
-        Assert.Null(results[0].LightspeedItem);
-        Assert.Equal("NOT-IN-LIGHTSPEED", results[0].ShopifyItem?.Sku);
+        // Both Shopify products should appear in the results
+        Assert.Equal(2, results.Count);
+
+        // First product: exact match
+        Assert.Equal(SkuMatchType.Exact, results[0].MatchType);
+        Assert.Equal("KLIM-001", results[0].ShopifyItem?.Sku);
+        Assert.NotNull(results[0].LightspeedItem);
+
+        // Second product: unmatched
+        Assert.Equal(SkuMatchType.Unmatched, results[1].MatchType);
+        Assert.Equal("UNKNOWN-001", results[1].ShopifyItem?.Sku);
+        Assert.Null(results[1].LightspeedItem);
     }
-    
+
     [Fact]
     public void GetInventoryUpdates_ShouldOnlyReturnChangedMatchedItems()
     {
@@ -307,7 +323,7 @@ public class SkuMatchingServiceTests
         Assert.Equal(2, updates[0].CurrentQuantity);
         Assert.Equal(5, updates[0].NewQuantity);
     }
-    
+
     [Fact]
     public void GetInventoryUpdates_ShouldCollapseIdenticalDuplicates()
     {
@@ -347,7 +363,7 @@ public class SkuMatchingServiceTests
         Assert.Equal("TEST-001", updates[0].Sku);
         Assert.Equal(5, updates[0].NewQuantity);
     }
-    
+
     [Fact]
     public void GetInventoryUpdates_ShouldRejectConflictingDuplicates()
     {
@@ -386,7 +402,7 @@ public class SkuMatchingServiceTests
         Assert.Throws<InvalidOperationException>(() =>
             _service.GetInventoryUpdates(matches));
     }
-    
+
     [Fact]
     public void GetInventoryUpdates_ShouldExcludeNegativeLightspeedQuantity()
     {
@@ -411,6 +427,564 @@ public class SkuMatchingServiceTests
         };
 
         var updates = _service.GetInventoryUpdates(matches);
+
+        Assert.Empty(updates);
+    }
+
+    [Fact]
+    public void ReconcileShopify_DuplicateLightspeedSku_ThrowsException()
+    {
+        // Arrange
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Description = "Adventure Jacket",
+                Quantity = 5
+            },
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Description = "Adventure Jacket",
+                Quantity = 8
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Title = "Adventure Jacket",
+                Location = "Ottawa",
+                CurrentQuantity = 3
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        // Act & Assert
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("KLIM-001", exception.Message);
+    }
+
+    [Fact]
+    public void ReconcileShopify_AmbiguousNormalizedSku_ThrowsException()
+    {
+        // Arrange
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Description = "Adventure Jacket",
+                Quantity = 5
+            },
+            new()
+            {
+                PartNumber = "KLIM001",
+                Description = "Different Jacket",
+                Quantity = 8
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM_001",
+                Title = "Adventure Jacket",
+                Location = "Ottawa",
+                CurrentQuantity = 3
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        // Act & Assert
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("KLIM_001", exception.Message);
+    }
+
+    [Fact]
+    public void ReconcileShopify_ExactMatchWithNormalizedCollision_Succeeds()
+    {
+        // Arrange
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Quantity = 5
+            },
+            new()
+            {
+                PartNumber = "KLIM001",
+                Quantity = 8
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "Ottawa",
+                CurrentQuantity = 3
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        // Act
+        var matches = service.ReconcileShopify(
+            lightspeedItems,
+            shopifyItems);
+
+        // Assert
+        Assert.Single(matches);
+
+        Assert.Equal(
+            SkuMatchType.Exact,
+            matches[0].MatchType);
+
+        Assert.Equal(
+            5,
+            matches[0].LightspeedItem!.Quantity);
+    }
+
+    [Fact]
+    public void ReconcileShopify_DuplicateSkuAndLocation_ThrowsException()
+    {
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Quantity = 5
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "Main",
+                CurrentQuantity = 3
+            },
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "Main",
+                CurrentQuantity = 4
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("KLIM-001", exception.Message);
+    }
+
+    [Fact]
+    public void ReconcileShopify_MultipleLocations_ThrowsException()
+    {
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Quantity = 5
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "Ottawa",
+                CurrentQuantity = 3
+            },
+            new()
+            {
+                Sku = "KLIM-002",
+                Location = "Toronto",
+                CurrentQuantity = 2
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("Multiple Shopify locations", exception.Message);
+    }
+
+    [Fact]
+    public void ReconcileShopify_MissingLocation_ThrowsException()
+    {
+        var lightspeedItems = new List<LightspeedInventoryItem>
+        {
+            new()
+            {
+                PartNumber = "KLIM-001",
+                Quantity = 5
+            }
+        };
+
+        var shopifyItems = new List<ShopifyInventoryItem>
+        {
+            new()
+            {
+                Sku = "KLIM-001",
+                Location = "",
+                CurrentQuantity = 3
+            }
+        };
+
+        var service = new SkuMatchingService();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.ReconcileShopify(
+                lightspeedItems,
+                shopifyItems));
+
+        Assert.Contains("missing locations", exception.Message);
+    }
+
+    [Fact]
+    public void ReconcileShopify_VerifiedMapping_MatchesDifferentSkus()
+    {
+        var service = new SkuMatchingService();
+
+        var lightspeed = new[]
+        {
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BMW-123",
+                Description = "BMW Jacket",
+                Quantity = 10
+            }
+        };
+
+        var shopify = new[]
+        {
+            new ShopifyInventoryItem
+            {
+                Sku = "BMW-JACKET-123",
+                Title = "BMW Jacket",
+                Location = "Main",
+                CurrentQuantity = 5
+            }
+        };
+
+        var mappings = new[]
+        {
+            new VerifiedSkuMapping("BMW-123", "BMW-JACKET-123")
+        };
+
+        var result = service.ReconcileShopify(
+            lightspeed,
+            shopify,
+            mappings);
+
+        var match = Assert.Single(result);
+
+        Assert.Equal(SkuMatchType.Verified, match.MatchType);
+        Assert.Equal("BMW-123", match.LightspeedItem?.PartNumber);
+    }
+
+    [Fact]
+    public void ReconcileShopify_ExactMatch_TakesPriorityOverVerified()
+    {
+        var service = new SkuMatchingService();
+
+        var lightspeed = new[]
+        {
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BMW-123",
+                Quantity = 10
+            }
+        };
+
+        var shopify = new[]
+        {
+            new ShopifyInventoryItem
+            {
+                Sku = "BMW-123",
+                Location = "Main",
+                CurrentQuantity = 5
+            }
+        };
+
+        var mappings = new[]
+        {
+            new VerifiedSkuMapping("BMW-123", "BMW-123")
+        };
+
+        var result = service.ReconcileShopify(
+            lightspeed,
+            shopify,
+            mappings);
+
+        Assert.Equal(
+            SkuMatchType.Exact,
+            Assert.Single(result).MatchType);
+    }
+
+    [Fact]
+    public void ReconcileShopify_VerifiedMappingConflictsWithExact_Throws()
+    {
+        var service = new SkuMatchingService();
+
+        var lightspeed = new[]
+        {
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BMW-123",
+                Quantity = 10
+            },
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BMW-456",
+                Quantity = 8
+            }
+        };
+
+        var shopify = new[]
+        {
+            new ShopifyInventoryItem
+            {
+                Sku = "BMW-123",
+                Location = "Main",
+                CurrentQuantity = 5
+            }
+        };
+
+        var mappings = new[]
+        {
+            new VerifiedSkuMapping("BMW-456", "BMW-123")
+        };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            service.ReconcileShopify(
+                lightspeed,
+                shopify,
+                mappings));
+    }
+
+    [Fact]
+    public void ReconcileShopify_DuplicateLightspeedAssignment_Throws()
+    {
+        var service = new SkuMatchingService();
+
+        var lightspeed = new[]
+        {
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BMW-123",
+                Quantity = 10
+            }
+        };
+
+        var shopify = new[]
+        {
+            new ShopifyInventoryItem
+            {
+                Sku = "BMW-123",
+                Location = "Main",
+                CurrentQuantity = 5
+            },
+            new ShopifyInventoryItem
+            {
+                Sku = "BMW123",
+                Location = "Main",
+                CurrentQuantity = 3
+            }
+        };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            service.ReconcileShopify(
+                lightspeed,
+                shopify));
+    }
+
+    [Fact]
+    public void ReconcileShopify_DuplicateVerifiedMappings_Throws()
+    {
+        var service = new SkuMatchingService();
+
+        var lightspeed = new[]
+        {
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BMW-123",
+                Quantity = 10
+            }
+        };
+
+        var shopify = new[]
+        {
+            new ShopifyInventoryItem
+            {
+                Sku = "SHOP-123",
+                Location = "Main",
+                CurrentQuantity = 5
+            }
+        };
+
+        var mappings = new[]
+        {
+            new VerifiedSkuMapping("BMW-123", "SHOP-123"),
+            new VerifiedSkuMapping("BMW-123", "SHOP-456")
+        };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            service.ReconcileShopify(
+                lightspeed,
+                shopify,
+                mappings));
+    }
+
+    [Fact]
+    public void ReconcileShopify_VerifiedMappingMissingLightspeed_RemainsUnmatched()
+    {
+        var service = new SkuMatchingService();
+
+        var lightspeed = Array.Empty<LightspeedInventoryItem>();
+
+        var shopify = new[]
+        {
+            new ShopifyInventoryItem
+            {
+                Sku = "SHOP-123",
+                Location = "Main",
+                CurrentQuantity = 5
+            }
+        };
+
+        var mappings = new[]
+        {
+            new VerifiedSkuMapping("BMW-123", "SHOP-123")
+        };
+
+        var result = service.ReconcileShopify(
+            lightspeed,
+            shopify,
+            mappings);
+
+        Assert.Equal(
+            SkuMatchType.Unmatched,
+            Assert.Single(result).MatchType);
+    }
+    [Fact]
+    public void GetInventoryUpdates_NormalizedMatch_IsExcluded()
+    {
+        var service = new SkuMatchingService();
+
+        var matches = new[]
+        {
+            new InventoryMatch
+            {
+                MatchType = SkuMatchType.Normalized,
+                LightspeedItem = new LightspeedInventoryItem
+                {
+                    PartNumber = "KLIM-123",
+                    Quantity = 10
+                },
+                ShopifyItem = new ShopifyInventoryItem
+                {
+                    Sku = "KLIM123",
+                    Location = "Main",
+                    CurrentQuantity = 5
+                }
+            }
+        };
+
+        var updates = service.GetInventoryUpdates(matches);
+
+        Assert.Empty(updates);
+    }
+
+    [Theory]
+    [InlineData(SkuMatchType.Exact)]
+    [InlineData(SkuMatchType.Verified)]
+    public void GetInventoryUpdates_TrustedMatch_IsIncluded(
+        SkuMatchType matchType)
+    {
+        var service = new SkuMatchingService();
+
+        var matches = new[]
+        {
+            new InventoryMatch
+            {
+                MatchType = matchType,
+                LightspeedItem = new LightspeedInventoryItem
+                {
+                    PartNumber = "BMW-123",
+                    Quantity = 10
+                },
+                ShopifyItem = new ShopifyInventoryItem
+                {
+                    Sku = "BMW-JACKET-123",
+                    Location = "Main",
+                    CurrentQuantity = 5
+                }
+            }
+        };
+
+        var updates = service.GetInventoryUpdates(matches);
+
+        var update = Assert.Single(updates);
+
+        Assert.Equal(10, update.NewQuantity);
+        Assert.Equal("BMW-JACKET-123", update.Sku);
+    }
+
+    [Fact]
+    public void GetInventoryUpdates_NegativeVerifiedQuantity_IsExcluded()
+    {
+        var service = new SkuMatchingService();
+
+        var matches = new[]
+        {
+            new InventoryMatch
+            {
+                MatchType = SkuMatchType.Verified,
+                LightspeedItem = new LightspeedInventoryItem
+                {
+                    PartNumber = "BMW-456",
+                    Quantity = -3
+                },
+                ShopifyItem = new ShopifyInventoryItem
+                {
+                    Sku = "BMW-JACKET-456",
+                    Location = "Main",
+                    CurrentQuantity = 5
+                }
+            }
+        };
+
+        var updates = service.GetInventoryUpdates(matches);
 
         Assert.Empty(updates);
     }

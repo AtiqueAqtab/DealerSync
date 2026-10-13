@@ -1,41 +1,49 @@
+using DealerSync.Api.Endpoints;
+using DealerSync.Core.Services;
+using DealerSync.Infrastructure.Importers;
+using DealerSync.Infrastructure.Exporters;
+using DealerSync.Infrastructure.Persistence;
+using DealerSync.Infrastructure.Persistence.Repositories;
+using DealerSync.Infrastructure.Services;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+// Configure PostgreSQL database
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                       ?? throw new InvalidOperationException(
+                           "Database connection string 'DefaultConnection' is missing.");
+
+builder.Services.AddDbContext<DealerSyncDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
+// OpenAPI documentation
 builder.Services.AddOpenApi();
+
+// Register dependencies
+builder.Services.AddTransient<LightspeedCsvImporter>();
+builder.Services.AddTransient<ShopifyCsvImporter>();
+builder.Services.AddTransient<SkuMatchingService>();
+builder.Services.AddTransient<ReconciliationService>();
+builder.Services.AddScoped<ReconciliationHistoryRepository>();
+builder.Services.AddScoped<SkuMappingRepository>();
+builder.Services.AddTransient<ReconciliationDiagnosticsCsvExporter>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
+// Configure HTTP pipeline
+if (app.Environment.IsDevelopment()) app.MapOpenApi();
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+// Register API endpoints
+app.MapHealthEndpoints();
+app.MapReconciliationEndpoints();
+app.MapSkuMappingEndpoints();
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
+// Expose Program for integration testing
+public partial class Program
 {
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
