@@ -88,6 +88,13 @@ public class ReconciliationService
                 match.HasInventoryDifference &&
                 match.LightspeedItem.Quantity < 0);
 
+        var normalizedUpdatesExcluded = matches.Count(match =>
+            match.MatchType == SkuMatchType.Normalized &&
+            match.LightspeedItem != null &&
+            match.ShopifyItem != null &&
+            match.HasInventoryDifference &&
+            match.LightspeedItem.Quantity >= 0);
+
         // Generate inventory updates
         var inventoryUpdates =
             _matchingService.GetInventoryUpdates(matches);
@@ -116,6 +123,7 @@ public class ReconciliationService
 
             InventoryUpdatesGenerated = inventoryUpdates.Count,
             NegativeQuantitiesExcluded = negativeQuantitiesExcluded,
+            NormalizedUpdatesExcluded = normalizedUpdatesExcluded,
 
             ShopifyCoverage = coverage,
 

@@ -105,4 +105,37 @@ public class ReconciliationDiagnosticsCsvExporterTests
         Assert.Contains("True", csv);
         Assert.DoesNotContain(",-3,", csv);
     }
+
+    [Fact]
+    public void Export_NormalizedMatch_RequiresReview()
+    {
+        var matches = new[]
+        {
+            new InventoryMatch
+            {
+                LightspeedItem = new LightspeedInventoryItem
+                {
+                    PartNumber = "KLIM-123",
+                    Quantity = 10
+                },
+                ShopifyItem = new ShopifyInventoryItem
+                {
+                    Sku = "KLIM123",
+                    Location = "Main",
+                    CurrentQuantity = 5
+                },
+                MatchType = SkuMatchType.Normalized
+            }
+        };
+
+        using var writer = new StringWriter();
+
+        _exporter.Export(writer, matches);
+
+        var csv = writer.ToString();
+
+        Assert.Contains("Diagnostic Status", csv);
+        Assert.Contains("ReviewRecommended", csv);
+        Assert.Contains("True", csv);
+    }
 }

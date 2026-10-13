@@ -12,6 +12,7 @@ public record ReconciliationSummaryResponse(
     int InventoryDifferences,
     int InventoryUpdatesGenerated,
     int NegativeQuantitiesExcluded,
+    int NormalizedUpdatesExcluded,
     double ShopifyCoverage
 )
 {
@@ -28,6 +29,7 @@ public record ReconciliationSummaryResponse(
             result.InventoryDifferences,
             result.InventoryUpdatesGenerated,
             result.NegativeQuantitiesExcluded,
+            result.NormalizedUpdatesExcluded,
             result.ShopifyCoverage
         );
     }

@@ -86,4 +86,29 @@ public class ReconciliationMatchResponseTests
         Assert.Null(response.ProposedQuantity);
         Assert.True(response.RequiresReview);
     }
+
+    [Fact]
+    public void FromMatch_NormalizedMatch_RequiresReview()
+    {
+        var match = new InventoryMatch
+        {
+            LightspeedItem = new LightspeedInventoryItem
+            {
+                PartNumber = "KLIM-123",
+                Quantity = 10
+            },
+            ShopifyItem = new ShopifyInventoryItem
+            {
+                Sku = "KLIM123",
+                Location = "Main",
+                CurrentQuantity = 5
+            },
+            MatchType = SkuMatchType.Normalized
+        };
+
+        var response = ReconciliationMatchResponse.FromMatch(match);
+
+        Assert.Equal("ReviewRecommended", response.DiagnosticStatus);
+        Assert.True(response.RequiresReview);
+    }
 }

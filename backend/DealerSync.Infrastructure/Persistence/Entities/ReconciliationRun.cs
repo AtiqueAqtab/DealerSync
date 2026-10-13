@@ -24,5 +24,7 @@ public class ReconciliationRun
 
     public int NegativeQuantitiesExcluded { get; set; }
 
+    public int NormalizedUpdatesExcluded { get; set; }
+
     public double ShopifyCoverage { get; set; }
 }

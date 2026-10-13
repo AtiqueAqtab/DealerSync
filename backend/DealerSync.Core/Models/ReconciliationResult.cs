@@ -14,6 +14,8 @@ public class ReconciliationResult
 
     public int NormalizedMatches { get; set; }
 
+    public int NormalizedUpdatesExcluded { get; set; }
+
     public int Unmatched { get; set; }
 
     public int InventoryDifferences { get; set; }

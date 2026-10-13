@@ -2,6 +2,7 @@ using System.Globalization;
 using CsvHelper;
 using DealerSync.Core.Enums;
 using DealerSync.Core.Models;
+using DealerSync.Core.Services;
 
 namespace DealerSync.Infrastructure.Exporters;
 
@@ -11,6 +12,7 @@ public class ReconciliationDiagnosticsCsvExporter
         TextWriter writer,
         IEnumerable<InventoryMatch> matches)
     {
+        var diagnosticService = new InventoryDiagnosticService();
         using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture);
 
         csv.WriteField("Shopify SKU");
@@ -21,6 +23,7 @@ public class ReconciliationDiagnosticsCsvExporter
         csv.WriteField("Current Quantity");
         csv.WriteField("Proposed Quantity");
         csv.WriteField("Inventory Difference");
+        csv.WriteField("Diagnostic Status");
         csv.WriteField("Requires Review");
         csv.NextRecord();
 
@@ -36,9 +39,8 @@ public class ReconciliationDiagnosticsCsvExporter
 
             var lightspeed = match.LightspeedItem;
 
-            var requiresReview =
-                match.MatchType == SkuMatchType.Unmatched ||
-                (lightspeed is not null && lightspeed.Quantity < 0);
+            var status = diagnosticService.GetStatus(match);
+            var requiresReview = diagnosticService.RequiresReview(match);
 
             csv.WriteField(shopify.Sku);
             csv.WriteField(shopify.Title);
@@ -54,6 +56,7 @@ public class ReconciliationDiagnosticsCsvExporter
                     : string.Empty);
 
             csv.WriteField(match.HasInventoryDifference);
+            csv.WriteField(status.ToString());
             csv.WriteField(requiresReview);
 
             csv.NextRecord();

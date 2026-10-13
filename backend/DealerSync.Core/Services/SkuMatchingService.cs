@@ -369,7 +369,8 @@ public class SkuMatchingService
     {
         var updates = matches
             .Where(match =>
-                match.MatchType != SkuMatchType.Unmatched &&
+                (match.MatchType == SkuMatchType.Exact ||
+                 match.MatchType == SkuMatchType.Verified) &&
                 match.LightspeedItem != null &&
                 match.ShopifyItem != null &&
                 match.HasInventoryDifference &&

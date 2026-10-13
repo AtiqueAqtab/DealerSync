@@ -50,6 +50,9 @@ namespace DealerSync.Infrastructure.Persistence.Migrations
                     b.Property<int>("NormalizedMatches")
                         .HasColumnType("integer");
 
+                    b.Property<int>("NormalizedUpdatesExcluded")
+                        .HasColumnType("integer");
+
                     b.Property<double>("ShopifyCoverage")
                         .HasColumnType("double precision");
 

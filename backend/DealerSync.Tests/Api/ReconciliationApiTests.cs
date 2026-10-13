@@ -548,6 +548,99 @@ public class ReconciliationApiTests
         Assert.Contains("Unmatched", csv);
     }
 
+    [Fact]
+    public async Task Reconciliation_NormalizedMatch_ExcludedFromInventoryUpdates()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var lightspeedSku = $"KLIM-{suffix}";
+        var shopifySku = $"KLIM{suffix}";
+
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            $"{lightspeedSku},Test Jacket,10\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            $"{shopifySku},Test Jacket,Main,5\n";
+
+        using var content = CreateMultipartContent(
+            lightspeedCsv,
+            shopifyCsv);
+
+        using var response = await _client.PostAsync(
+            "/api/reconciliation?detailed=true",
+            content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync());
+
+        var summary = json.RootElement.GetProperty("summary");
+
+        Assert.Equal(1, summary.GetProperty("normalizedMatches").GetInt32());
+        Assert.Equal(0, summary.GetProperty("verifiedMatches").GetInt32());
+        Assert.Equal(1, summary.GetProperty("normalizedUpdatesExcluded").GetInt32());
+        Assert.Equal(0, summary.GetProperty("inventoryUpdatesGenerated").GetInt32());
+        Assert.Equal(100, summary.GetProperty("shopifyCoverage").GetDouble());
+
+        var match = Assert.Single(
+            json.RootElement.GetProperty("matches").EnumerateArray());
+
+        Assert.Equal(
+            "Normalized",
+            match.GetProperty("matchType").GetString());
+
+        Assert.Equal(
+            "ReviewRecommended",
+            match.GetProperty("diagnosticStatus").GetString());
+
+        Assert.True(match.GetProperty("requiresReview").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Reconciliation_NormalizedExclusion_IsSavedToHistory()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var lightspeedSku = $"LS-{suffix}";
+        var shopifySku = $"LS{suffix}";
+
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            $"{lightspeedSku},Test Product,10\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            $"{shopifySku},Test Product,Main,5\n";
+
+        using var content = CreateMultipartContent(
+            lightspeedCsv,
+            shopifyCsv);
+
+        using var response = await _client.PostAsync(
+            "/api/reconciliation",
+            content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var historyResponse = await _client.GetAsync(
+            "/api/reconciliation/history");
+
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+
+        using var json = JsonDocument.Parse(
+            await historyResponse.Content.ReadAsStringAsync());
+
+        Assert.Contains(
+            json.RootElement.EnumerateArray(),
+            run =>
+                run.GetProperty("normalizedMatches").GetInt32() == 1 &&
+                run.GetProperty("normalizedUpdatesExcluded").GetInt32() == 1 &&
+                run.GetProperty("inventoryUpdatesGenerated").GetInt32() == 0);
+    }
+
     private static MultipartFormDataContent CreateMultipartContent(
         string lightspeedCsv,
         string shopifyCsv,

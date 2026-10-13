@@ -1,5 +1,6 @@
 using DealerSync.Core.Enums;
 using DealerSync.Core.Models;
+using DealerSync.Core.Services;
 
 namespace DealerSync.Api.DTOs;
 
@@ -12,6 +13,7 @@ public record ReconciliationMatchResponse(
     int CurrentQuantity,
     int? ProposedQuantity,
     bool HasInventoryDifference,
+    string DiagnosticStatus,
     bool RequiresReview
 )
 {
@@ -26,9 +28,10 @@ public record ReconciliationMatchResponse(
 
         // Unmatched items require manual review.
         // Negative source quantities must not be exported.
-        var requiresReview =
-            match.MatchType == SkuMatchType.Unmatched ||
-            (lightspeed != null && lightspeed.Quantity < 0);
+        var diagnosticService = new InventoryDiagnosticService();
+
+        var status = diagnosticService.GetStatus(match);
+        var requiresReview = diagnosticService.RequiresReview(match);
 
         return new ReconciliationMatchResponse(
             ShopifySku: shopify.Sku,
@@ -42,6 +45,7 @@ public record ReconciliationMatchResponse(
                 ? lightspeed.Quantity
                 : null,
             HasInventoryDifference: match.HasInventoryDifference,
+            DiagnosticStatus: status.ToString(),
             RequiresReview: requiresReview
         );
     }

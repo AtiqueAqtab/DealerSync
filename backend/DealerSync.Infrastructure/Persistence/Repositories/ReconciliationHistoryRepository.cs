@@ -21,18 +21,20 @@ public class ReconciliationHistoryRepository
         {
             Id = Guid.NewGuid(),
             CreatedAt = DateTime.UtcNow,
-        
+
             LightspeedItemCount = result.LightspeedItemCount,
             ShopifyItemCount = result.ShopifyItemCount,
-        
+
             ExactMatches = result.ExactMatches,
             VerifiedMatches = result.VerifiedMatches,
             NormalizedMatches = result.NormalizedMatches,
             Unmatched = result.Unmatched,
-        
+
             InventoryDifferences = result.InventoryDifferences,
             InventoryUpdatesGenerated = result.InventoryUpdatesGenerated,
             NegativeQuantitiesExcluded = result.NegativeQuantitiesExcluded,
+            NormalizedUpdatesExcluded = result.NormalizedUpdatesExcluded,
+
             ShopifyCoverage = result.ShopifyCoverage
         };
 
