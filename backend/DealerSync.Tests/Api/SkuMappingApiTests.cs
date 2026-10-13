@@ -344,4 +344,124 @@ public class SkuMappingApiTests
             HttpStatusCode.NotFound,
             response.StatusCode);
     }
+    
+    [Fact]
+    public async Task VerifiedMapping_ChangesReconciliationResult()
+    {
+        // Arrange: Use unique SKUs to avoid test interference
+        var suffix = Guid.NewGuid().ToString("N");
+    
+        var lightspeedSku = $"BMW-{suffix}";
+        var shopifySku = $"JACKET-{suffix}";
+    
+        // Create an unverified mapping
+        var createResponse = await _client.PostAsJsonAsync(
+            "/api/sku-mappings",
+            new
+            {
+                LightspeedPartNumber = lightspeedSku,
+                ShopifySku = shopifySku
+            });
+    
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+    
+        using var createdJson = JsonDocument.Parse(
+            await createResponse.Content.ReadAsStringAsync());
+    
+        var mappingId = createdJson.RootElement
+            .GetProperty("id").GetGuid();
+    
+        // Prepare CSV files with different SKUs
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            $"{lightspeedSku},BMW Jacket,10\n";
+    
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            $"{shopifySku},BMW Jacket,Main,5\n";
+    
+        // Helper to upload fresh multipart content for each request
+        async Task<JsonDocument> ReconcileAsync()
+        {
+            using var content = new MultipartFormDataContent();
+    
+            content.Add(
+                new ByteArrayContent(
+                    System.Text.Encoding.UTF8.GetBytes(lightspeedCsv)),
+                "lightspeedFile",
+                "lightspeed.csv");
+    
+            content.Add(
+                new ByteArrayContent(
+                    System.Text.Encoding.UTF8.GetBytes(shopifyCsv)),
+                "shopifyFile",
+                "shopify.csv");
+    
+            using var response = await _client.PostAsync(
+                "/api/reconciliation",
+                content);
+    
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    
+            return JsonDocument.Parse(
+                await response.Content.ReadAsStringAsync());
+        }
+    
+        // Act 1: Reconcile before verification
+        using (var before = await ReconcileAsync())
+        {
+            Assert.Equal(
+                0,
+                before.RootElement.GetProperty("verifiedMatches").GetInt32());
+    
+            Assert.Equal(
+                1,
+                before.RootElement.GetProperty("unmatched").GetInt32());
+    
+            Assert.Equal(
+                0,
+                before.RootElement.GetProperty("shopifyCoverage").GetDouble());
+        }
+    
+        // Verify the mapping
+        var verifyResponse = await _client.PatchAsync(
+            $"/api/sku-mappings/{mappingId}/verify",
+            null);
+    
+        Assert.Equal(HttpStatusCode.OK, verifyResponse.StatusCode);
+    
+        // Act 2: Reconcile after verification
+        using (var after = await ReconcileAsync())
+        {
+            Assert.Equal(
+                1,
+                after.RootElement.GetProperty("verifiedMatches").GetInt32());
+    
+            Assert.Equal(
+                0,
+                after.RootElement.GetProperty("unmatched").GetInt32());
+    
+            Assert.Equal(
+                100,
+                after.RootElement.GetProperty("shopifyCoverage").GetDouble());
+    
+            Assert.Equal(
+                1,
+                after.RootElement
+                    .GetProperty("inventoryUpdatesGenerated").GetInt32());
+        }
+    
+        // Assert: The latest reconciliation was saved to PostgreSQL
+        using var historyResponse = await _client.GetAsync(
+            "/api/reconciliation/history");
+    
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+    
+        using var historyJson = JsonDocument.Parse(
+            await historyResponse.Content.ReadAsStringAsync());
+    
+        Assert.Contains(
+            historyJson.RootElement.EnumerateArray(),
+            run => run.GetProperty("verifiedMatches").GetInt32() == 1);
+    }
 }

@@ -67,4 +67,14 @@ public class SkuMappingRepository
 
         return true;
     }
+    
+    public async Task<List<SkuMapping>> GetVerifiedAsync()
+    {
+        return await _context.SkuMappings
+            .AsNoTracking()
+            .Where(mapping => mapping.IsVerified)
+            .OrderBy(mapping => mapping.LightspeedPartNumber)
+            .ToListAsync();
+    }
+    
 }

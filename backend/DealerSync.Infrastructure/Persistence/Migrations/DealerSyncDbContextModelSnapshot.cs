@@ -59,6 +59,9 @@ namespace DealerSync.Infrastructure.Persistence.Migrations
                     b.Property<int>("Unmatched")
                         .HasColumnType("integer");
 
+                    b.Property<int>("VerifiedMatches")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.ToTable("ReconciliationRuns");

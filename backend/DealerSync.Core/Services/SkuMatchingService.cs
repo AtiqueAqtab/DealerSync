@@ -109,7 +109,8 @@ public class SkuMatchingService
     
     public List<InventoryMatch> ReconcileShopify(
         IEnumerable<LightspeedInventoryItem> lightspeedItems,
-        IEnumerable<ShopifyInventoryItem> shopifyItems)
+        IEnumerable<ShopifyInventoryItem> shopifyItems,
+        IEnumerable<VerifiedSkuMapping>? verifiedMappings = null)
     {
         var shopifyList = shopifyItems.ToList();
         
@@ -179,69 +180,187 @@ public class SkuMatchingService
                 $"'{duplicateSku}'. Reconciliation cannot continue.");
         }
 
-        var exactLookup = lightspeedList
-            .GroupBy(
-                item => item.PartNumber,
-                StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                group => group.Key,
-                group => group.First(),
-                StringComparer.OrdinalIgnoreCase);
-
+        // Build exact Lightspeed lookup
+        var exactLookup = lightspeedList.ToDictionary(
+            item => item.PartNumber,
+            StringComparer.OrdinalIgnoreCase);
+        
+        // Build normalized Lightspeed lookup
         var normalizedLookup = lightspeedList
             .GroupBy(item => NormalizeSku(item.PartNumber))
             .Where(group => !string.IsNullOrWhiteSpace(group.Key))
             .ToDictionary(
                 group => group.Key,
                 group => group.ToList());
-
-        var results = new List<InventoryMatch>();
-
-        foreach (var shopifyItem in shopifyList)
+        
+        // Build verified mapping lookup
+        var mappingList = (verifiedMappings ??
+            Enumerable.Empty<VerifiedSkuMapping>()).ToList();
+        
+        if (mappingList.Any(mapping =>
+                string.IsNullOrWhiteSpace(mapping.LightspeedPartNumber) ||
+                string.IsNullOrWhiteSpace(mapping.ShopifySku)))
         {
-            LightspeedInventoryItem? lightspeedItem = null;
-            var matchType = SkuMatchType.Unmatched;
-
-            if (!string.IsNullOrWhiteSpace(shopifyItem.Sku))
-            {
-                if (exactLookup.TryGetValue(
-                        shopifyItem.Sku,
-                        out var exactMatch))
-                {
-                    lightspeedItem = exactMatch;
-                    matchType = SkuMatchType.Exact;
-                }
-                else
-                {
-                    var normalizedSku = NormalizeSku(shopifyItem.Sku);
-
-                    if (normalizedLookup.TryGetValue(
-                            normalizedSku,
-                            out var normalizedMatches))
-                    {
-                        // Reject ambiguous normalized matches
-                        if (normalizedMatches.Count > 1)
-                        {
-                            throw new InvalidOperationException(
-                                $"Ambiguous normalized SKU match for " +
-                                $"Shopify SKU '{shopifyItem.Sku}'. " +
-                                $"Multiple Lightspeed part numbers match.");
-                        }
-
-                        lightspeedItem = normalizedMatches[0];
-                        matchType = SkuMatchType.Normalized;
-                    }
-                }
-            }
-
-            results.Add(new InventoryMatch
-            {
-                LightspeedItem = lightspeedItem,
-                ShopifyItem = shopifyItem,
-                MatchType = matchType
-            });
+            throw new InvalidOperationException(
+                "Verified SKU mappings cannot contain empty identifiers.");
         }
-
+        
+        var duplicateMappingShopify = mappingList
+            .GroupBy(mapping => mapping.ShopifySku,
+                StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1);
+        
+        var duplicateMappingLightspeed = mappingList
+            .GroupBy(mapping => mapping.LightspeedPartNumber,
+                StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1);
+        
+        if (duplicateMappingShopify != null ||
+            duplicateMappingLightspeed != null)
+        {
+            throw new InvalidOperationException(
+                "Conflicting verified SKU mappings detected.");
+        }
+        
+        var verifiedLookup = mappingList.ToDictionary(
+            mapping => mapping.ShopifySku,
+            StringComparer.OrdinalIgnoreCase);
+        
+        // Store matches by their position in the Shopify inventory
+        var results = shopifyList
+            .Select(shopifyItem => new InventoryMatch
+            {
+                ShopifyItem = shopifyItem,
+                LightspeedItem = null,
+                MatchType = SkuMatchType.Unmatched
+            })
+            .ToList();
+        
+        // Track which Shopify SKU claims each Lightspeed part number
+        var assignedLightspeed = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        
+        void AssignMatch(
+            int index,
+            LightspeedInventoryItem lightspeedItem,
+            SkuMatchType matchType)
+        {
+            var shopifySku = shopifyList[index].Sku;
+        
+            if (assignedLightspeed.TryGetValue(
+                    lightspeedItem.PartNumber,
+                    out var existingShopifySku))
+            {
+                throw new InvalidOperationException(
+                    $"Conflicting inventory assignment: Lightspeed part " +
+                    $"'{lightspeedItem.PartNumber}' is claimed by Shopify SKUs " +
+                    $"'{existingShopifySku}' and '{shopifySku}'.");
+            }
+        
+            assignedLightspeed.Add(
+                lightspeedItem.PartNumber,
+                shopifySku);
+        
+            results[index] = new InventoryMatch
+            {
+                ShopifyItem = shopifyList[index],
+                LightspeedItem = lightspeedItem,
+                MatchType = matchType
+            };
+        }
+        
+        // Pass 1: Exact matches always have first priority
+        for (var i = 0; i < shopifyList.Count; i++)
+        {
+            var shopifySku = shopifyList[i].Sku;
+        
+            if (string.IsNullOrWhiteSpace(shopifySku))
+                continue;
+        
+            if (exactLookup.TryGetValue(
+                    shopifySku,
+                    out var exactMatch))
+            {
+                AssignMatch(i, exactMatch, SkuMatchType.Exact);
+            }
+        }
+        
+        // Pass 2: Apply verified mappings
+        for (var i = 0; i < shopifyList.Count; i++)
+        {
+            var shopifySku = shopifyList[i].Sku;
+        
+            if (string.IsNullOrWhiteSpace(shopifySku))
+                continue;
+        
+            if (!verifiedLookup.TryGetValue(
+                    shopifySku,
+                    out var mapping))
+            {
+                continue;
+            }
+        
+            // Ignore mappings whose Lightspeed item is absent
+            if (!exactLookup.TryGetValue(
+                    mapping.LightspeedPartNumber,
+                    out var mappedLightspeed))
+            {
+                continue;
+            }
+        
+            // An exact match may agree with a verified mapping
+            if (results[i].MatchType == SkuMatchType.Exact)
+            {
+                if (!string.Equals(
+                        results[i].LightspeedItem!.PartNumber,
+                        mappedLightspeed.PartNumber,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Verified mapping for Shopify SKU '{shopifySku}' " +
+                        "conflicts with its exact match.");
+                }
+        
+                continue;
+            }
+        
+            AssignMatch(i, mappedLightspeed, SkuMatchType.Verified);
+        }
+        
+        // Pass 3: Apply normalized matching to remaining Shopify items
+        for (var i = 0; i < shopifyList.Count; i++)
+        {
+            if (results[i].MatchType != SkuMatchType.Unmatched)
+                continue;
+        
+            var shopifySku = shopifyList[i].Sku;
+        
+            if (string.IsNullOrWhiteSpace(shopifySku))
+                continue;
+        
+            var normalizedSku = NormalizeSku(shopifySku);
+        
+            if (!normalizedLookup.TryGetValue(
+                    normalizedSku,
+                    out var normalizedMatches))
+            {
+                continue;
+            }
+        
+            if (normalizedMatches.Count > 1)
+            {
+                throw new InvalidOperationException(
+                    $"Ambiguous normalized SKU match for " +
+                    $"Shopify SKU '{shopifySku}'. " +
+                    "Multiple Lightspeed part numbers match.");
+            }
+        
+            AssignMatch(
+                i,
+                normalizedMatches[0],
+                SkuMatchType.Normalized);
+        }
+        
         return results;
     }
     

@@ -1,5 +1,6 @@
 using CsvHelper;
 using DealerSync.Api.DTOs;
+using DealerSync.Core.Models;
 using DealerSync.Infrastructure.Services;
 using DealerSync.Infrastructure.Persistence.Repositories;
 
@@ -25,13 +26,13 @@ public static class ReconciliationEndpoints
             })
             .WithName("GetReconciliationStatus");
 
-        // Upload inventory files and run reconciliation
-        group.MapPost("/",
-                async (
-                    IFormFile lightspeedFile,
-                    IFormFile shopifyFile,
-                    ReconciliationService service,
-                    ReconciliationHistoryRepository historyRepository) =>
+        // Upload inventory files and run reconciliation 
+        group.MapPost("/", async ( 
+                IFormFile lightspeedFile, 
+                IFormFile shopifyFile, 
+                ReconciliationService service, 
+                ReconciliationHistoryRepository historyRepository, 
+                SkuMappingRepository skuMappingRepository) => 
             {
                 const long maxFileSize = 10 * 1024 * 1024;
 
@@ -81,10 +82,22 @@ public static class ReconciliationEndpoints
                     using var shopifyReader =
                         new StreamReader(shopifyStream);
 
-                    // Reuse existing reconciliation logic
+                    // Retrieve only manually verified SKU mappings
+                    var savedMappings =
+                        await skuMappingRepository.GetVerifiedAsync();
+                    
+                    // Convert database entities into Core models
+                    var verifiedMappings = savedMappings
+                        .Select(mapping => new VerifiedSkuMapping(
+                            mapping.LightspeedPartNumber,
+                            mapping.ShopifySku))
+                        .ToList();
+                    
+                    // Run reconciliation using verified mappings
                     var result = service.Run(
                         lightspeedReader,
-                        shopifyReader);
+                        shopifyReader,
+                        verifiedMappings);
 
                     // Save successful reconciliation results
                     await historyRepository.SaveAsync(result);
@@ -130,7 +143,7 @@ public static class ReconciliationEndpoints
                 })
             .WithName("GetReconciliationHistory");
 
-// Retrieve a specific reconciliation run by ID
+        // Retrieve a specific reconciliation run by ID
         group.MapGet("/history/{id:guid}",
                 async (
                     Guid id,

@@ -9,6 +9,8 @@ public class ReconciliationRun
     public int LightspeedItemCount { get; set; }
 
     public int ShopifyItemCount { get; set; }
+    
+    public int VerifiedMatches { get; set; }
 
     public int ExactMatches { get; set; }
 
