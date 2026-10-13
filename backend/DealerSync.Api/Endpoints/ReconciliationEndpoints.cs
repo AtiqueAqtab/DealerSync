@@ -3,6 +3,8 @@ using DealerSync.Api.DTOs;
 using DealerSync.Core.Models;
 using DealerSync.Infrastructure.Services;
 using DealerSync.Infrastructure.Persistence.Repositories;
+using DealerSync.Infrastructure.Exporters;
+using System.Text;
 
 namespace DealerSync.Api.Endpoints;
 
@@ -27,12 +29,15 @@ public static class ReconciliationEndpoints
             .WithName("GetReconciliationStatus");
 
         // Upload inventory files and run reconciliation 
-        group.MapPost("/", async ( 
-                IFormFile lightspeedFile, 
-                IFormFile shopifyFile, 
-                ReconciliationService service, 
-                ReconciliationHistoryRepository historyRepository, 
-                SkuMappingRepository skuMappingRepository) => 
+        group.MapPost("/", async (
+                IFormFile lightspeedFile,
+                IFormFile shopifyFile,
+                ReconciliationService service,
+                ReconciliationHistoryRepository historyRepository,
+                SkuMappingRepository skuMappingRepository,
+                ReconciliationDiagnosticsCsvExporter diagnosticsExporter,
+                bool detailed = false,
+                string? format = null) =>
             {
                 const long maxFileSize = 10 * 1024 * 1024;
 
@@ -102,7 +107,34 @@ public static class ReconciliationEndpoints
                     // Save successful reconciliation results
                     await historyRepository.SaveAsync(result);
 
-                    // Return the summary to the client
+// Return downloadable CSV diagnostics
+                    if (string.Equals(
+                            format,
+                            "csv",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        using var writer = new StringWriter();
+
+                        diagnosticsExporter.Export(writer, result.Matches);
+
+                        var csvBytes = Encoding.UTF8.GetBytes(writer.ToString());
+
+                        return Results.File(
+                            fileContents: csvBytes,
+                            contentType: "text/csv; charset=utf-8",
+                            fileDownloadName: "dealersync_diagnostics.csv");
+                    }
+
+// Return detailed JSON when requested
+                    if (detailed)
+                    {
+                        var detailedResponse =
+                            ReconciliationDetailedResponse.FromResult(result);
+
+                        return Results.Ok(detailedResponse);
+                    }
+
+// Default: return summary JSON
                     var response =
                         ReconciliationSummaryResponse.FromResult(result);
 
@@ -132,8 +164,8 @@ public static class ReconciliationEndpoints
             })
             .WithName("ReconcileInventory")
             .DisableAntiforgery();
-        
-        // Retrieve the 50 most recent reconciliation runs
+
+        /// Retrieve the 50 most recent reconciliation runs
         group.MapGet("/history",
                 async (ReconciliationHistoryRepository repository) =>
                 {

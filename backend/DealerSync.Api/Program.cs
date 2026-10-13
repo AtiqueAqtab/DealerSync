@@ -1,9 +1,10 @@
 using DealerSync.Api.Endpoints;
 using DealerSync.Core.Services;
 using DealerSync.Infrastructure.Importers;
-using DealerSync.Infrastructure.Services;
+using DealerSync.Infrastructure.Exporters;
 using DealerSync.Infrastructure.Persistence;
 using DealerSync.Infrastructure.Persistence.Repositories;
+using DealerSync.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,14 +27,12 @@ builder.Services.AddTransient<SkuMatchingService>();
 builder.Services.AddTransient<ReconciliationService>();
 builder.Services.AddScoped<ReconciliationHistoryRepository>();
 builder.Services.AddScoped<SkuMappingRepository>();
+builder.Services.AddTransient<ReconciliationDiagnosticsCsvExporter>();
 
 var app = builder.Build();
 
 // Configure HTTP pipeline
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
+if (app.Environment.IsDevelopment()) app.MapOpenApi();
 
 app.UseHttpsRedirection();
 
@@ -45,4 +44,6 @@ app.MapSkuMappingEndpoints();
 app.Run();
 
 // Expose Program for integration testing
-public partial class Program { }
+public partial class Program
+{
+}

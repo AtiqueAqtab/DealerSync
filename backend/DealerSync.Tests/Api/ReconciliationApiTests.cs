@@ -242,7 +242,7 @@ public class ReconciliationApiTests
         Assert.Contains("Invalid quantity", responseBody);
         Assert.Contains("ABC123", responseBody);
     }
-    
+
     [Fact]
     public async Task Reconciliation_ValidCsvFiles_SavesHistoryToDatabase()
     {
@@ -294,7 +294,7 @@ public class ReconciliationApiTests
                 run.GetProperty("inventoryDifferences").GetInt32() == 1 &&
                 run.GetProperty("inventoryUpdatesGenerated").GetInt32() == 1);
     }
-    
+
     [Fact]
     public async Task ReconciliationHistory_ExistingId_ReturnsRun()
     {
@@ -349,7 +349,7 @@ public class ReconciliationApiTests
             id,
             json.RootElement.GetProperty("id").GetGuid());
     }
-    
+
     [Fact]
     public async Task ReconciliationHistory_UnknownId_ReturnsNotFound()
     {
@@ -362,7 +362,7 @@ public class ReconciliationApiTests
             HttpStatusCode.NotFound,
             response.StatusCode);
     }
-    
+
     [Fact]
     public async Task Reconciliation_InvalidCsv_DoesNotSaveHistory()
     {
@@ -414,6 +414,139 @@ public class ReconciliationApiTests
         Assert.Equal(countBefore, countAfter);
     }
 
+    [Fact]
+    public async Task Reconciliation_Detailed_ReturnsIndividualMatches()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var matchedSku = $"MATCH-{suffix}";
+        var unmatchedSku = $"UNMATCHED-{suffix}";
+
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            $"{matchedSku},Test Jacket,10\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            $"{matchedSku},Test Jacket,Main,5\n" +
+            $"{unmatchedSku},Test Helmet,Main,3\n";
+
+        using var content = CreateMultipartContent(
+            lightspeedCsv,
+            shopifyCsv);
+        using var response = await _client.PostAsync(
+            "/api/reconciliation?detailed=true",
+            content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync());
+        var root = json.RootElement;
+
+        // Verify summary statistics
+        var summary = root.GetProperty("summary");
+
+        Assert.Equal(
+            1,
+            summary.GetProperty("exactMatches").GetInt32());
+
+        Assert.Equal(
+            1,
+            summary.GetProperty("unmatched").GetInt32());
+
+        Assert.Equal(
+            50,
+            summary.GetProperty("shopifyCoverage").GetDouble());
+
+        // Verify individual matches
+        var matches = root.GetProperty("matches");
+
+        Assert.Equal(2, matches.GetArrayLength());
+
+        var matched = matches.EnumerateArray()
+            .Single(item =>
+                item.GetProperty("shopifySku").GetString() == matchedSku);
+
+        Assert.Equal(
+            "Exact",
+            matched.GetProperty("matchType").GetString());
+
+        Assert.Equal(
+            10,
+            matched.GetProperty("proposedQuantity").GetInt32());
+
+        var unmatched = matches.EnumerateArray()
+            .Single(item =>
+                item.GetProperty("shopifySku").GetString() == unmatchedSku);
+
+        Assert.Equal(
+            "Unmatched",
+            unmatched.GetProperty("matchType").GetString());
+
+        Assert.True(
+            unmatched.GetProperty("requiresReview").GetBoolean());
+
+        Assert.Equal(
+            JsonValueKind.Null,
+            unmatched.GetProperty("proposedQuantity").ValueKind);
+    }
+
+    [Fact]
+    public async Task Reconciliation_CsvFormat_ReturnsDownloadableDiagnostics()
+    {
+        // Arrange
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var matchedSku = $"MATCH-{suffix}";
+        var unmatchedSku = $"UNMATCHED-{suffix}";
+
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            $"{matchedSku},Test Jacket,10\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            $"{matchedSku},Test Jacket,Main,5\n" +
+            $"{unmatchedSku},Test Helmet,Main,3\n";
+
+        using var content = CreateMultipartContent(
+            lightspeedCsv,
+            shopifyCsv);
+
+        // Act
+        using var response = await _client.PostAsync(
+            "/api/reconciliation?format=csv",
+            content);
+
+        // Assert: Successful CSV response
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.Equal(
+            "text/csv",
+            response.Content.Headers.ContentType?.MediaType);
+
+        var disposition =
+            response.Content.Headers.ContentDisposition;
+
+        Assert.NotNull(disposition);
+
+        Assert.Contains(
+            "dealersync_diagnostics.csv",
+            disposition.FileName ?? disposition.FileNameStar ?? "");
+
+        // Verify CSV contents
+        var csv = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("Shopify SKU", csv);
+        Assert.Contains("Lightspeed Part Number", csv);
+
+        Assert.Contains(matchedSku, csv);
+        Assert.Contains(unmatchedSku, csv);
+
+        Assert.Contains("Exact", csv);
+        Assert.Contains("Unmatched", csv);
+    }
 
     private static MultipartFormDataContent CreateMultipartContent(
         string lightspeedCsv,
@@ -447,4 +580,5 @@ public class ReconciliationApiTests
 
         return content;
     }
+
 }
