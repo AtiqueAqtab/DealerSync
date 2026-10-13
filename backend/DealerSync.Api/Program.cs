@@ -25,6 +25,7 @@ builder.Services.AddTransient<ShopifyCsvImporter>();
 builder.Services.AddTransient<SkuMatchingService>();
 builder.Services.AddTransient<ReconciliationService>();
 builder.Services.AddScoped<ReconciliationHistoryRepository>();
+builder.Services.AddScoped<SkuMappingRepository>();
 
 var app = builder.Build();
 
@@ -39,6 +40,7 @@ app.UseHttpsRedirection();
 // Register API endpoints
 app.MapHealthEndpoints();
 app.MapReconciliationEndpoints();
+app.MapSkuMappingEndpoints();
 
 app.Run();
 
