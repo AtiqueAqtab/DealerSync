@@ -1,19 +1,19 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Xunit;
 using System.Text;
 using System.Text.Json;
+using DealerSync.Tests.Fixtures;
+using Xunit;
 
 namespace DealerSync.Tests.Api;
 
 public class ReconciliationApiTests
-    : IClassFixture<WebApplicationFactory<Program>>
+    : IClassFixture<DealerSyncApiFactory>
 {
     private readonly HttpClient _client;
 
     public ReconciliationApiTests(
-        WebApplicationFactory<Program> factory)
+        DealerSyncApiFactory factory)
     {
         _client = factory.CreateClient();
     }
@@ -241,6 +241,177 @@ public class ReconciliationApiTests
 
         Assert.Contains("Invalid quantity", responseBody);
         Assert.Contains("ABC123", responseBody);
+    }
+    
+    [Fact]
+    public async Task Reconciliation_ValidCsvFiles_SavesHistoryToDatabase()
+    {
+        // Arrange
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            "HISTORY-001,Test Jacket,10\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            "HISTORY-001,Test Jacket,Main,7\n";
+
+        using var content = CreateMultipartContent(
+            lightspeedCsv,
+            shopifyCsv);
+
+        // Act: Run reconciliation
+        var response = await _client.PostAsync(
+            "/api/reconciliation",
+            content);
+
+        // Assert: Reconciliation succeeded
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Retrieve reconciliation history
+        var historyResponse = await _client.GetAsync(
+            "/api/reconciliation/history");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            historyResponse.StatusCode);
+
+        using var json = JsonDocument.Parse(
+            await historyResponse.Content.ReadAsStringAsync());
+
+        var runs = json.RootElement;
+
+        Assert.Equal(
+            JsonValueKind.Array,
+            runs.ValueKind);
+
+        // Verify that our reconciliation was saved
+        Assert.Contains(
+            runs.EnumerateArray(),
+            run =>
+                run.GetProperty("lightspeedItemCount").GetInt32() == 1 &&
+                run.GetProperty("shopifyItemCount").GetInt32() == 1 &&
+                run.GetProperty("exactMatches").GetInt32() == 1 &&
+                run.GetProperty("inventoryDifferences").GetInt32() == 1 &&
+                run.GetProperty("inventoryUpdatesGenerated").GetInt32() == 1);
+    }
+    
+    [Fact]
+    public async Task ReconciliationHistory_ExistingId_ReturnsRun()
+    {
+        // Arrange: Save a reconciliation
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            "HISTORY-002,Test Helmet,5\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            "HISTORY-002,Test Helmet,Main,3\n";
+
+        using var content = CreateMultipartContent(
+            lightspeedCsv,
+            shopifyCsv);
+
+        var postResponse = await _client.PostAsync(
+            "/api/reconciliation",
+            content);
+
+        Assert.Equal(HttpStatusCode.OK, postResponse.StatusCode);
+
+        // Retrieve history
+        var historyResponse = await _client.GetAsync(
+            "/api/reconciliation/history");
+
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+
+        using var historyJson = JsonDocument.Parse(
+            await historyResponse.Content.ReadAsStringAsync());
+
+        var run = historyJson.RootElement
+            .EnumerateArray()
+            .First(item =>
+                item.GetProperty("lightspeedItemCount").GetInt32() == 1 &&
+                item.GetProperty("shopifyItemCount").GetInt32() == 1 &&
+                item.GetProperty("exactMatches").GetInt32() == 1);
+
+        var id = run.GetProperty("id").GetGuid();
+
+        // Act: Retrieve the individual run
+        var response = await _client.GetAsync(
+            $"/api/reconciliation/history/{id}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(
+            id,
+            json.RootElement.GetProperty("id").GetGuid());
+    }
+    
+    [Fact]
+    public async Task ReconciliationHistory_UnknownId_ReturnsNotFound()
+    {
+        var unknownId = Guid.NewGuid();
+
+        var response = await _client.GetAsync(
+            $"/api/reconciliation/history/{unknownId}");
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+    }
+    
+    [Fact]
+    public async Task Reconciliation_InvalidCsv_DoesNotSaveHistory()
+    {
+        // Arrange: Record how many runs currently exist
+        var beforeResponse = await _client.GetAsync(
+            "/api/reconciliation/history");
+
+        Assert.Equal(HttpStatusCode.OK, beforeResponse.StatusCode);
+
+        using var beforeJson = JsonDocument.Parse(
+            await beforeResponse.Content.ReadAsStringAsync());
+
+        var countBefore = beforeJson.RootElement.GetArrayLength();
+
+        // Invalid Lightspeed quantity
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            "INVALID-001,Test Jacket,invalid\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            "INVALID-001,Test Jacket,Main,5\n";
+
+        using var content = CreateMultipartContent(
+            lightspeedCsv,
+            shopifyCsv);
+
+        // Act
+        var response = await _client.PostAsync(
+            "/api/reconciliation",
+            content);
+
+        // Assert: Invalid inventory data is rejected
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+
+        // Verify no additional history record was created
+        var afterResponse = await _client.GetAsync(
+            "/api/reconciliation/history");
+
+        Assert.Equal(HttpStatusCode.OK, afterResponse.StatusCode);
+
+        using var afterJson = JsonDocument.Parse(
+            await afterResponse.Content.ReadAsStringAsync());
+
+        var countAfter = afterJson.RootElement.GetArrayLength();
+
+        Assert.Equal(countBefore, countAfter);
     }
 
 

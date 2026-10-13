@@ -3,6 +3,7 @@ using DealerSync.Core.Services;
 using DealerSync.Infrastructure.Importers;
 using DealerSync.Infrastructure.Services;
 using DealerSync.Infrastructure.Persistence;
+using DealerSync.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +24,7 @@ builder.Services.AddTransient<LightspeedCsvImporter>();
 builder.Services.AddTransient<ShopifyCsvImporter>();
 builder.Services.AddTransient<SkuMatchingService>();
 builder.Services.AddTransient<ReconciliationService>();
+builder.Services.AddScoped<ReconciliationHistoryRepository>();
 
 var app = builder.Build();
 

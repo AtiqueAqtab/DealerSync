@@ -1,6 +1,7 @@
 using CsvHelper;
 using DealerSync.Api.DTOs;
 using DealerSync.Infrastructure.Services;
+using DealerSync.Infrastructure.Persistence.Repositories;
 
 namespace DealerSync.Api.Endpoints;
 
@@ -26,10 +27,11 @@ public static class ReconciliationEndpoints
 
         // Upload inventory files and run reconciliation
         group.MapPost("/",
-            (
-                IFormFile lightspeedFile,
-                IFormFile shopifyFile,
-                ReconciliationService service) =>
+                async (
+                    IFormFile lightspeedFile,
+                    IFormFile shopifyFile,
+                    ReconciliationService service,
+                    ReconciliationHistoryRepository historyRepository) =>
             {
                 const long maxFileSize = 10 * 1024 * 1024;
 
@@ -84,7 +86,10 @@ public static class ReconciliationEndpoints
                         lightspeedReader,
                         shopifyReader);
 
-                    // Convert the result to an API response DTO
+                    // Save successful reconciliation results
+                    await historyRepository.SaveAsync(result);
+
+                    // Return the summary to the client
                     var response =
                         ReconciliationSummaryResponse.FromResult(result);
 
@@ -114,5 +119,35 @@ public static class ReconciliationEndpoints
             })
             .WithName("ReconcileInventory")
             .DisableAntiforgery();
+        
+        // Retrieve the 50 most recent reconciliation runs
+        group.MapGet("/history",
+                async (ReconciliationHistoryRepository repository) =>
+                {
+                    var runs = await repository.GetRecentAsync();
+
+                    return Results.Ok(runs);
+                })
+            .WithName("GetReconciliationHistory");
+
+// Retrieve a specific reconciliation run by ID
+        group.MapGet("/history/{id:guid}",
+                async (
+                    Guid id,
+                    ReconciliationHistoryRepository repository) =>
+                {
+                    var run = await repository.GetByIdAsync(id);
+
+                    if (run == null)
+                    {
+                        return Results.NotFound(new
+                        {
+                            Error = "Reconciliation run not found."
+                        });
+                    }
+
+                    return Results.Ok(run);
+                })
+            .WithName("GetReconciliationRunById");
     }
 }
