@@ -223,13 +223,13 @@ If an uploaded file contains multiple locations, DealerSync rejects it.
 
 ### Which Matches Can Generate Updates?
 
-| Match Type | Eligible for Inventory Updates |
-|---|---|
-| Exact | Yes |
-| Verified | Yes |
-| Normalized | No |
-| Unmatched | No |
-| Negative quantity | No |
+| Match Type        | Eligible for Inventory Updates |
+|-------------------|--------------------------------|
+| Exact             | Yes                            |
+| Verified          | Yes                            |
+| Normalized        | No                             |
+| Unmatched         | No                             |
+| Negative quantity | No                             |
 
 Even when a match is eligible, DealerSync only generates a proposed inventory change. It doesn't automatically push that
 change to Shopify.
@@ -254,21 +254,21 @@ Each result includes information such as:
 
 ### Diagnostic Statuses
 
-| Status | Meaning |
-|---|---|
-| `Ready` | Exact or verified match with a valid quantity |
-| `ReviewRecommended` | Normalized match that should be verified |
-| `MappingRequired` | No matching Lightspeed product |
-| `InvalidQuantity` | Negative Lightspeed quantity |
+| Status              | Meaning                                       |
+|---------------------|-----------------------------------------------|
+| `Ready`             | Exact or verified match with a valid quantity |
+| `ReviewRecommended` | Normalized match that should be verified      |
+| `MappingRequired`   | No matching Lightspeed product                |
+| `InvalidQuantity`   | Negative Lightspeed quantity                  |
 
 For example:
 
-| Shopify SKU | Lightspeed SKU | Match Type | Status |
-|---|---|---|---|
-| BMW-123 | BMW-123 | Exact | Ready |
-| KLIM123 | KLIM-123 | Normalized | ReviewRecommended |
-| REVIT-JACKET-456 | REV-456 | Verified | Ready |
-| TRIUMPH-789 | — | Unmatched | MappingRequired |
+| Shopify SKU      | Lightspeed SKU | Match Type | Status            |
+|------------------|----------------|------------|-------------------|
+| BMW-123          | BMW-123        | Exact      | Ready             |
+| KLIM123          | KLIM-123       | Normalized | ReviewRecommended |
+| REVIT-JACKET-456 | REV-456        | Verified   | Ready             |
+| TRIUMPH-789      | —              | Unmatched  | MappingRequired   |
 
 The reports can be returned as detailed JSON through the API or downloaded as a CSV file.
 
@@ -473,24 +473,24 @@ The API provides endpoints for reconciliation, history, and SKU mapping manageme
 
 ### Reconciliation
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/health` | Check API health |
-| GET | `/api/reconciliation/status` | Check reconciliation service |
-| POST | `/api/reconciliation` | Upload CSV files and get a summary |
-| POST | `/api/reconciliation?detailed=true` | Get detailed reconciliation results |
-| POST | `/api/reconciliation?format=csv` | Download diagnostic CSV |
-| GET | `/api/reconciliation/history` | View recent reconciliations |
-| GET | `/api/reconciliation/history/{id}` | View a specific reconciliation |
+| Method | Endpoint                            | Description                         |
+|--------|-------------------------------------|-------------------------------------|
+| GET    | `/api/health`                       | Check API health                    |
+| GET    | `/api/reconciliation/status`        | Check reconciliation service        |
+| POST   | `/api/reconciliation`               | Upload CSV files and get a summary  |
+| POST   | `/api/reconciliation?detailed=true` | Get detailed reconciliation results |
+| POST   | `/api/reconciliation?format=csv`    | Download diagnostic CSV             |
+| GET    | `/api/reconciliation/history`       | View recent reconciliations         |
+| GET    | `/api/reconciliation/history/{id}`  | View a specific reconciliation      |
 
 ### SKU Mappings
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/sku-mappings` | Create a SKU mapping |
-| GET | `/api/sku-mappings` | List saved mappings |
-| GET | `/api/sku-mappings/{id}` | Get a specific mapping |
-| PATCH | `/api/sku-mappings/{id}/verify` | Verify a mapping |
+| Method | Endpoint                        | Description            |
+|--------|---------------------------------|------------------------|
+| POST   | `/api/sku-mappings`             | Create a SKU mapping   |
+| GET    | `/api/sku-mappings`             | List saved mappings    |
+| GET    | `/api/sku-mappings/{id}`        | Get a specific mapping |
+| PATCH  | `/api/sku-mappings/{id}/verify` | Verify a mapping       |
 
 ### Creating a Mapping
 
