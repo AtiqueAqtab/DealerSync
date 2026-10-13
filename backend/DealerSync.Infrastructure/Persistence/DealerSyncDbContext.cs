@@ -20,21 +20,30 @@ public class DealerSyncDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // Enable PostgreSQL case-insensitive text
+        modelBuilder.HasPostgresExtension("citext");
+
         modelBuilder.Entity<SkuMapping>(entity =>
         {
             entity.HasKey(mapping => mapping.Id);
 
             entity.Property(mapping => mapping.LightspeedPartNumber)
                 .IsRequired()
-                .HasMaxLength(255);
+                .HasMaxLength(255)
+                .HasColumnType("citext");
 
             entity.Property(mapping => mapping.ShopifySku)
                 .IsRequired()
-                .HasMaxLength(255);
+                .HasMaxLength(255)
+                .HasColumnType("citext");
 
-            entity.HasIndex(mapping => mapping.LightspeedPartNumber);
+            // Prevent duplicate Lightspeed part numbers
+            entity.HasIndex(mapping => mapping.LightspeedPartNumber)
+                .IsUnique();
 
-            entity.HasIndex(mapping => mapping.ShopifySku);
+            // Prevent duplicate Shopify SKUs
+            entity.HasIndex(mapping => mapping.ShopifySku)
+                .IsUnique();
         });
 
         modelBuilder.Entity<ReconciliationRun>(entity =>

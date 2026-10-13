@@ -20,6 +20,7 @@ namespace DealerSync.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "citext");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("DealerSync.Infrastructure.Persistence.Entities.ReconciliationRun", b =>
@@ -78,21 +79,23 @@ namespace DealerSync.Infrastructure.Persistence.Migrations
                     b.Property<string>("LightspeedPartNumber")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("citext");
 
                     b.Property<string>("ShopifySku")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("citext");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LightspeedPartNumber");
+                    b.HasIndex("LightspeedPartNumber")
+                        .IsUnique();
 
-                    b.HasIndex("ShopifySku");
+                    b.HasIndex("ShopifySku")
+                        .IsUnique();
 
                     b.ToTable("SkuMappings");
                 });
