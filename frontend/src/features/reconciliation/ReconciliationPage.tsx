@@ -1,13 +1,11 @@
 import {useState} from "react";
+import {useReconciliation} from "../../hooks/useReconciliation";
 import {FileSpreadsheet, Upload} from "lucide-react";
 import {runReconciliation} from "../../api/reconciliation";
 import {Download} from "lucide-react";
 import {createDiagnosticsCsv} from "../../lib/csvExport";
 import ReconciliationResultsTable from "./ReconciliationResultsTable";
 
-import type {
-    ReconciliationDetailedResponse,
-} from "../../types/reconciliation";
 
 export default function ReconciliationPage() {
     const [lightspeedFile, setLightspeedFile] = useState<File | null>(null);
@@ -15,8 +13,7 @@ export default function ReconciliationPage() {
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [result, setResult] =
-        useState<ReconciliationDetailedResponse | null>(null);
+    const {result, setResult} = useReconciliation();
 
     const validateFile = (file: File): boolean => {
         const maxSize = 10 * 1024 * 1024;

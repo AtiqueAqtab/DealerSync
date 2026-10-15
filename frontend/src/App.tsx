@@ -3,6 +3,8 @@ import AppLayout from "./components/layout/AppLayout";
 import {ThemeProvider} from "./components/layout/ThemeProvider";
 import DashboardPage from "./features/dashboard/DashboardPage";
 import ReconciliationPage from "./features/reconciliation/ReconciliationPage";
+import ReconciliationProvider from "./features/reconciliation/ReconciliationProvider";
+import InventoryPage from "./features/inventory/InventoryPage";
 
 function PlaceholderPage({title}: { title: string }) {
     return (
@@ -21,38 +23,41 @@ function PlaceholderPage({title}: { title: string }) {
 export default function App() {
     return (
         <ThemeProvider>
-            <BrowserRouter>
-                <Routes>
-                    <Route element={<AppLayout/>}>
-                        <Route index element={<DashboardPage/>}/>
+            <ReconciliationProvider>
 
-                        <Route
-                            path="reconcile"
-                            element={<ReconciliationPage/>}
-                        />
+                <BrowserRouter>
+                    <Routes>
+                        <Route element={<AppLayout/>}>
+                            <Route index element={<DashboardPage/>}/>
 
-                        <Route
-                            path="inventory"
-                            element={<PlaceholderPage title="Inventory Review"/>}
-                        />
+                            <Route
+                                path="reconcile"
+                                element={<ReconciliationPage/>}
+                            />
 
-                        <Route
-                            path="mappings"
-                            element={<PlaceholderPage title="SKU Mappings"/>}
-                        />
+                            <Route
+                                path="inventory"
+                                element={<InventoryPage/>}
+                            />
 
-                        <Route
-                            path="history"
-                            element={<PlaceholderPage title="Reconciliation History"/>}
-                        />
+                            <Route
+                                path="mappings"
+                                element={<PlaceholderPage title="SKU Mappings"/>}
+                            />
 
-                        <Route
-                            path="settings"
-                            element={<PlaceholderPage title="Settings"/>}
-                        />
-                    </Route>
-                </Routes>
-            </BrowserRouter>
+                            <Route
+                                path="history"
+                                element={<PlaceholderPage title="Reconciliation History"/>}
+                            />
+
+                            <Route
+                                path="settings"
+                                element={<PlaceholderPage title="Settings"/>}
+                            />
+                        </Route>
+                    </Routes>
+                </BrowserRouter>
+            </ReconciliationProvider>
         </ThemeProvider>
     );
 }
