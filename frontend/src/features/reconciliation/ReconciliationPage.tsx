@@ -1,6 +1,8 @@
 import {useState} from "react";
 import {FileSpreadsheet, Upload} from "lucide-react";
 import {runReconciliation} from "../../api/reconciliation";
+import {Download} from "lucide-react";
+import {createDiagnosticsCsv} from "../../lib/csvExport";
 import ReconciliationResultsTable from "./ReconciliationResultsTable";
 
 import type {
@@ -90,6 +92,31 @@ export default function ReconciliationPage() {
         }
     };
 
+    const handleDownloadDiagnostics = () => {
+        if (!result || isSubmitting) {
+            return;
+        }
+
+        const csv = createDiagnosticsCsv(result.matches);
+
+        // UTF-8 BOM helps spreadsheet applications recognize the encoding.
+        const blob = new Blob(["\uFEFF", csv], {
+            type: "text/csv;charset=utf-8",
+        });
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = "dealersync_diagnostics.csv";
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
     return (
         <div className="mx-auto max-w-7xl space-y-8">
             <section>
@@ -159,6 +186,7 @@ export default function ReconciliationPage() {
                             <input
                                 type="file"
                                 accept=".csv,text/csv"
+                                disabled={isSubmitting}
                                 className="sr-only"
                                 onChange={(event) => {
                                     handleFileChange(
@@ -261,6 +289,23 @@ export default function ReconciliationPage() {
                         {result.matches.length.toLocaleString()} inventory records
                         included in the reconciliation results.
                     </p>
+
+                    <div
+                        className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-5 dark:border-slate-800">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Diagnostics report only. Not for Shopify inventory import.
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={handleDownloadDiagnostics}
+                            disabled={isSubmitting}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                            <Download size={17}/>
+                            Download Diagnostics CSV
+                        </button>
+                    </div>
                 </section>
             )}
             {result && (
