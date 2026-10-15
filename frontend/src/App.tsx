@@ -5,6 +5,7 @@ import DashboardPage from "./features/dashboard/DashboardPage";
 import ReconciliationPage from "./features/reconciliation/ReconciliationPage";
 import ReconciliationProvider from "./features/reconciliation/ReconciliationProvider";
 import InventoryPage from "./features/inventory/InventoryPage";
+import MappingsPage from "./features/mappings/MappingsPage";
 
 function PlaceholderPage({title}: { title: string }) {
     return (
@@ -42,7 +43,7 @@ export default function App() {
 
                             <Route
                                 path="mappings"
-                                element={<PlaceholderPage title="SKU Mappings"/>}
+                                element={<MappingsPage/>}
                             />
 
                             <Route
