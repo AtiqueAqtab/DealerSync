@@ -1,6 +1,8 @@
 import {BrowserRouter, Route, Routes} from "react-router";
 import AppLayout from "./components/layout/AppLayout";
 import {ThemeProvider} from "./components/layout/ThemeProvider";
+import DashboardPage from "./features/dashboard/DashboardPage";
+import ReconciliationPage from "./features/reconciliation/ReconciliationPage";
 
 function PlaceholderPage({title}: { title: string }) {
     return (
@@ -22,14 +24,11 @@ export default function App() {
             <BrowserRouter>
                 <Routes>
                     <Route element={<AppLayout/>}>
-                        <Route
-                            index
-                            element={<PlaceholderPage title="Dashboard"/>}
-                        />
+                        <Route index element={<DashboardPage/>}/>
 
                         <Route
                             path="reconcile"
-                            element={<PlaceholderPage title="Reconciliation"/>}
+                            element={<ReconciliationPage/>}
                         />
 
                         <Route

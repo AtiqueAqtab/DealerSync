@@ -107,7 +107,7 @@ public static class ReconciliationEndpoints
                     // Save successful reconciliation results
                     await historyRepository.SaveAsync(result);
 
-// Return downloadable CSV diagnostics
+                    // Return downloadable CSV diagnostics
                     if (string.Equals(
                             format,
                             "csv",
@@ -125,7 +125,7 @@ public static class ReconciliationEndpoints
                             fileDownloadName: "dealersync_diagnostics.csv");
                     }
 
-// Return detailed JSON when requested
+                    // Return detailed JSON when requested
                     if (detailed)
                     {
                         var detailedResponse =
@@ -134,7 +134,7 @@ public static class ReconciliationEndpoints
                         return Results.Ok(detailedResponse);
                     }
 
-// Default: return summary JSON
+                    // Default: return summary JSON
                     var response =
                         ReconciliationSummaryResponse.FromResult(result);
 
