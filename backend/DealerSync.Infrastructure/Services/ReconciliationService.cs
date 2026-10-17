@@ -80,20 +80,19 @@ public class ReconciliationService
                 match.HasInventoryDifference);
 
         // Exclude negative Lightspeed quantities
-        var negativeQuantitiesExcluded = matches.Count(
-            match =>
-                match.MatchType != SkuMatchType.Unmatched &&
-                match.LightspeedItem != null &&
-                match.ShopifyItem != null &&
-                match.HasInventoryDifference &&
-                match.LightspeedItem.Quantity < 0);
+        var negativeQuantitiesExcluded = matches.Count(match =>
+            match.ShopifyItem != null &&
+            match.Contributors.Any(contributor =>
+                contributor.LightspeedItem.Quantity < 0) &&
+            match.HasInventoryDifference);
 
         var normalizedUpdatesExcluded = matches.Count(match =>
-            match.MatchType == SkuMatchType.Normalized &&
-            match.LightspeedItem != null &&
             match.ShopifyItem != null &&
             match.HasInventoryDifference &&
-            match.LightspeedItem.Quantity >= 0);
+            match.Contributors.Any(contributor =>
+                contributor.MatchType == SkuMatchType.Normalized) &&
+            match.Contributors.All(contributor =>
+                contributor.LightspeedItem.Quantity >= 0));
 
         // Generate inventory updates
         var inventoryUpdates =

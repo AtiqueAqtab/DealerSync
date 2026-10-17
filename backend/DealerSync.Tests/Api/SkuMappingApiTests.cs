@@ -204,7 +204,7 @@ public class SkuMappingApiTests
             "/api/sku-mappings",
             second);
 
-        Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, secondResponse.StatusCode);
     }
 
     [Fact]
@@ -467,14 +467,15 @@ public class SkuMappingApiTests
     }
 
     [Fact]
-    public async Task VerifiedMapping_ConflictsWithExactMatch_ReturnsBadRequest()
+    public async Task VerifiedMapping_WithExactMatch_CombinesInventory()
     {
+        // Arrange
         var suffix = Guid.NewGuid().ToString("N");
 
         var exactSku = $"EXACT-{suffix}";
         var mappedSku = $"MAPPED-{suffix}";
 
-        // Create a mapping that will conflict with an exact match
+        // Create an additional supplier mapping.
         var createResponse = await _client.PostAsJsonAsync(
             "/api/sku-mappings",
             new
@@ -483,27 +484,33 @@ public class SkuMappingApiTests
                 ShopifySku = exactSku
             });
 
-        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            createResponse.StatusCode);
 
         using var createdJson = JsonDocument.Parse(
             await createResponse.Content.ReadAsStringAsync());
 
         var mappingId = createdJson.RootElement
-            .GetProperty("id").GetGuid();
+            .GetProperty("id")
+            .GetGuid();
 
-        // Verify the conflicting mapping
+        // Verify the additional supplier mapping.
         using var verifyResponse = await _client.PatchAsync(
             $"/api/sku-mappings/{mappingId}/verify",
             null);
 
-        Assert.Equal(HttpStatusCode.OK, verifyResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            verifyResponse.StatusCode);
 
-        // Both Lightspeed SKUs exist
+        // Two Lightspeed part numbers represent one product.
         var lightspeedCsv =
             "Part Number,Description,Qty\n" +
             $"{exactSku},Exact Product,10\n" +
-            $"{mappedSku},Mapped Product,8\n";
+            $"{mappedSku},Additional Supplier,8\n";
 
+        // Shopify has one inventory record.
         var shopifyCsv =
             "SKU,Title,Location,On hand (current)\n" +
             $"{exactSku},Exact Product,Main,5\n";
@@ -522,12 +529,135 @@ public class SkuMappingApiTests
             "shopifyFile",
             "shopify.csv");
 
-        // Attempt reconciliation
+        // Act
         using var response = await _client.PostAsync(
             "/api/reconciliation",
             content);
 
-        // Conflicting verified mapping must reject reconciliation
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        using var responseJson = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync());
+
+        var summary = responseJson.RootElement;
+
+        // One Shopify product, despite two Lightspeed contributors.
+        Assert.Equal(
+            1,
+            summary.GetProperty("shopifyItemCount").GetInt32());
+
+        Assert.Equal(
+            2,
+            summary.GetProperty("lightspeedItemCount").GetInt32());
+
+        // The exact match remains the overall match type.
+        Assert.Equal(
+            1,
+            summary.GetProperty("exactMatches").GetInt32());
+
+        Assert.Equal(
+            0,
+        summary.GetProperty("unmatched").GetInt32());
+
+        // Shopify currently has 5; combined Lightspeed quantity is 18.
+        Assert.Equal(
+            1,
+            summary.GetProperty("inventoryDifferences").GetInt32());
+
+        // Only one inventory update is generated.
+        Assert.Equal(
+            1,
+            summary.GetProperty("inventoryUpdatesGenerated").GetInt32());
+
+        Assert.Equal(
+            100,
+            summary.GetProperty("shopifyCoverage").GetDouble());
+    }
+
+    [Fact]
+    public async Task CreateMappings_MultipleSuppliersForSameShopifySku_Succeeds()
+    {
+        // Arrange
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var shopifySku = $"BATTERY-{suffix}";
+        var supplierA = $"BAT-A-{suffix}";
+        var supplierB = $"BAT-B-{suffix}";
+
+        // Act: Create the first supplier mapping.
+        using var firstResponse = await _client.PostAsJsonAsync(
+            "/api/sku-mappings",
+            new
+            {
+                LightspeedPartNumber = supplierA,
+                ShopifySku = shopifySku
+            });
+
+        // Create a second supplier mapping to the same Shopify SKU.
+        using var secondResponse = await _client.PostAsJsonAsync(
+            "/api/sku-mappings",
+            new
+            {
+                LightspeedPartNumber = supplierB,
+                ShopifySku = shopifySku
+            });
+
+        // Assert: Both mappings should be created.
+        Assert.Equal(
+            HttpStatusCode.Created,
+            firstResponse.StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            secondResponse.StatusCode);
+
+        using var firstJson = JsonDocument.Parse(
+            await firstResponse.Content.ReadAsStringAsync());
+
+        using var secondJson = JsonDocument.Parse(
+            await secondResponse.Content.ReadAsStringAsync());
+
+        Assert.Equal(
+            shopifySku,
+            firstJson.RootElement.GetProperty("shopifySku").GetString());
+
+        Assert.Equal(
+            shopifySku,
+            secondJson.RootElement.GetProperty("shopifySku").GetString());
+
+        Assert.Equal(
+            supplierA,
+            firstJson.RootElement.GetProperty("lightspeedPartNumber").GetString());
+
+        Assert.Equal(
+            supplierB,
+            secondJson.RootElement.GetProperty("lightspeedPartNumber").GetString());
+
+        // Both mappings must initially be unverified.
+        Assert.False(
+            firstJson.RootElement.GetProperty("isVerified").GetBoolean());
+
+        Assert.False(
+            secondJson.RootElement.GetProperty("isVerified").GetBoolean());
+
+        // Confirm that both mappings were persisted.
+        using var listResponse = await _client.GetAsync(
+            "/api/sku-mappings");
+
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        using var listJson = JsonDocument.Parse(
+            await listResponse.Content.ReadAsStringAsync());
+
+        var matchingMappings = listJson.RootElement
+            .EnumerateArray()
+            .Where(mapping =>
+                mapping.GetProperty("shopifySku").GetString() == shopifySku)
+            .ToList();
+
+        Assert.Equal(2, matchingMappings.Count);
     }
 }

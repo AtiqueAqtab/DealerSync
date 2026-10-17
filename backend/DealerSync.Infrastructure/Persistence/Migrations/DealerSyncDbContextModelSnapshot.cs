@@ -100,8 +100,7 @@ namespace DealerSync.Infrastructure.Persistence.Migrations
                     b.HasIndex("LightspeedPartNumber")
                         .IsUnique();
 
-                    b.HasIndex("ShopifySku")
-                        .IsUnique();
+                    b.HasIndex("ShopifySku");
 
                     b.ToTable("SkuMappings");
                 });
