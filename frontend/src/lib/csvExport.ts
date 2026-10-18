@@ -7,6 +7,7 @@ function protectSpreadsheetText(value: string): string {
 
     return value;
 }
+
 /**
  * Escapes a value so it can safely be written into a CSV field.
  *
