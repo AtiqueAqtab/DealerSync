@@ -13,7 +13,7 @@ I started DealerSync to automate the repetitive parts of that process without as
 The application compares inventory exports, identifies SKU relationships, finds quantity differences, and generates
 reports that can be reviewed before making changes to Shopify.
 
-## Current Version
+## Latest Tagged Version
 
 ### v0.2.0 — Reconciliation API and Saved SKU Mappings
 
@@ -37,6 +37,14 @@ Some of the main features include:
 - Automated unit and integration testing
 
 DealerSync still works with CSV imports and exports. Direct Shopify API integration is something I plan to add later.
+
+## Current Development
+
+v0.3.0 adds a React/TypeScript dashboard and multi-supplier reconciliation. The current feature branch includes CSV uploads, searchable results, supplier contributions, review warnings, diagnostics downloads, and mapping creation and verification.
+
+The core features are implemented. Final end-to-end acceptance and release preparation remain open. The History and Settings routes are placeholders. The API saves run summaries; it does not save historical item-level reconciliation details.
+
+The full plan contains 15 milestones, from v0.1.0 through the exploratory v4.0.0 Lightspeed integration. See [docs/ROADMAP.md](docs/ROADMAP.md) for scope, status, dependencies, and remaining v0.3.0 work. Read [AGENTS.md](AGENTS.md) before contributing or starting an agent-assisted task.
 
 ## Why I Built It
 
@@ -571,7 +579,7 @@ Each mapping includes:
 - Creation timestamp
 - Last updated timestamp
 
-The database uses case-insensitive unique indexes to prevent conflicting mappings.
+Lightspeed part numbers are case-insensitive and unique across mappings. Multiple Lightspeed part numbers may share one Shopify SKU after the multi-supplier migration is applied.
 
 ### Reconciliation History
 
@@ -617,6 +625,12 @@ Database credentials are also kept out of source control using environment confi
 - **Containerization:** Docker Compose
 
 ## Roadmap
+
+The complete plan is maintained in [docs/ROADMAP.md](docs/ROADMAP.md). The summary below records the earlier plan. Use the detailed roadmap for current completion status and the expanded 15 milestones.
+
+The local repository has v0.1.0 and v0.2.0 tags. The unchecked v0.2 final-release item below remains open until its intended meaning is confirmed. v0.3.0 is in development.
+
+The earlier dashboard plan included drag-and-drop uploads and a dedicated History page. The supplied v0.3.0 milestone requires CSV uploads but does not explicitly include those two features. Confirm their release scope before adding them. Current uploads use file selection, and the dashboard shows recent saved summaries.
 
 ### v0.1.0 — CSV Reconciliation MVP
 
