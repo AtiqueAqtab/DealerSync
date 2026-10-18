@@ -660,4 +660,438 @@ public class SkuMappingApiTests
 
         Assert.Equal(2, matchingMappings.Count);
     }
+
+    [Fact]
+    public async Task Reconciliation_UnverifiedSupplier_ExcludesInventoryUpdate()
+    {
+        // Arrange
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var shopifySku = $"BATTERY-{suffix}";
+        var verifiedSupplier = $"BAT-A-{suffix}";
+        var unverifiedSupplier = $"BAT-B-{suffix}";
+
+        // Create the first supplier mapping.
+        using var firstResponse = await _client.PostAsJsonAsync(
+            "/api/sku-mappings",
+            new
+            {
+            LightspeedPartNumber = verifiedSupplier,
+            ShopifySku = shopifySku
+            });
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            firstResponse.StatusCode);
+
+        using var firstJson = JsonDocument.Parse(
+            await firstResponse.Content.ReadAsStringAsync());
+
+        var verifiedMappingId = firstJson.RootElement
+            .GetProperty("id")
+            .GetGuid();
+
+        // Verify only the first supplier.
+        using var verifyResponse = await _client.PatchAsync(
+            $"/api/sku-mappings/{verifiedMappingId}/verify",
+            null);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            verifyResponse.StatusCode);
+
+        // Create the second supplier mapping.
+        // Leave this mapping unverified.
+        using var secondResponse = await _client.PostAsJsonAsync(
+            "/api/sku-mappings",
+            new
+            {
+                LightspeedPartNumber = unverifiedSupplier,
+                ShopifySku = shopifySku
+            });
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            secondResponse.StatusCode);
+
+        // Both supplier parts exist in Lightspeed.
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            $"{verifiedSupplier},Verified Supplier,5\n" +
+            $"{unverifiedSupplier},Unverified Supplier,3\n";
+
+        // Shopify currently has 2 units.
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            $"{shopifySku},Battery,Main,2\n";
+
+        using var content = new MultipartFormDataContent();
+
+            content.Add(
+            new ByteArrayContent(
+                System.Text.Encoding.UTF8.GetBytes(lightspeedCsv)),
+                "lightspeedFile",
+                "lightspeed.csv");
+
+        content.Add(
+            new ByteArrayContent(
+                System.Text.Encoding.UTF8.GetBytes(shopifyCsv)),
+            "shopifyFile",
+            "shopify.csv");
+
+        // Act
+        using var response = await _client.PostAsync(
+            "/api/reconciliation",
+            content);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        using var responseJson = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync());
+
+        var summary = responseJson.RootElement;
+
+        Assert.Equal(
+            1,
+            summary.GetProperty("shopifyItemCount").GetInt32());
+
+        Assert.Equal(
+            2,
+            summary.GetProperty("lightspeedItemCount").GetInt32());
+
+        // A known unverified supplier makes the group incomplete.
+        // DealerSync must not generate an automatic update.
+        Assert.Equal(
+            0,
+            summary.GetProperty("inventoryUpdatesGenerated").GetInt32());
+    }
+
+    [Fact]
+    public async Task Reconciliation_MissingVerifiedSupplier_ExcludesInventoryUpdate()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var shopifySku = $"BATTERY-{suffix}";
+        var supplierA = $"BAT-A-{suffix}";
+        var supplierB = $"BAT-B-{suffix}";
+
+        // Create and verify both supplier mappings.
+        foreach (var supplier in new[] { supplierA, supplierB })
+        {
+            using var createResponse = await _client.PostAsJsonAsync(
+                "/api/sku-mappings",
+                new
+                {
+                    LightspeedPartNumber = supplier,
+                    ShopifySku = shopifySku
+                });
+
+            Assert.Equal(
+                HttpStatusCode.Created,
+                createResponse.StatusCode);
+
+            using var createdJson = JsonDocument.Parse(
+                await createResponse.Content.ReadAsStringAsync());
+
+            var mappingId = createdJson.RootElement
+                .GetProperty("id")
+                .GetGuid();
+
+            using var verifyResponse = await _client.PatchAsync(
+                $"/api/sku-mappings/{mappingId}/verify",
+                null);
+
+            Assert.Equal(
+                HttpStatusCode.OK,
+                verifyResponse.StatusCode);
+        }
+
+        // Only supplier A appears in the uploaded inventory.
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            $"{supplierA},Battery Supplier A,5\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            $"{shopifySku},Battery,Main,2\n";
+
+        using var content = new MultipartFormDataContent();
+
+        content.Add(
+            new ByteArrayContent(
+                System.Text.Encoding.UTF8.GetBytes(lightspeedCsv)),
+            "lightspeedFile",
+            "lightspeed.csv");
+
+        content.Add(
+            new ByteArrayContent(
+                System.Text.Encoding.UTF8.GetBytes(shopifyCsv)),
+            "shopifyFile",
+            "shopify.csv");
+
+        using var response = await _client.PostAsync(
+            "/api/reconciliation",
+            content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var responseJson = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync());
+
+        var summary = responseJson.RootElement;
+
+        Assert.Equal(
+            0,
+            summary.GetProperty("inventoryUpdatesGenerated").GetInt32());
+    }
+
+    [Fact]
+    public async Task Reconciliation_BlockedSupplierWithOverflow_DoesNotFail()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var shopifySku = $"BATTERY-{suffix}";
+        var supplierA = $"BAT-A-{suffix}";
+        var supplierB = $"BAT-B-{suffix}";
+        var supplierC = $"BAT-C-{suffix}";
+
+        // Create three mappings. Verify only A and B.
+        foreach (var supplier in new[] { supplierA, supplierB, supplierC })
+        {
+            using var createResponse = await _client.PostAsJsonAsync(
+                "/api/sku-mappings",
+                new
+                {
+                    LightspeedPartNumber = supplier,
+                    ShopifySku = shopifySku
+                });
+
+            Assert.Equal(
+                HttpStatusCode.Created,
+                createResponse.StatusCode);
+
+            using var createdJson = JsonDocument.Parse(
+                await createResponse.Content.ReadAsStringAsync());
+
+            var mappingId = createdJson.RootElement
+                .GetProperty("id")
+                .GetGuid();
+
+            if (supplier == supplierC)
+                continue;
+
+            using var verifyResponse = await _client.PatchAsync(
+                $"/api/sku-mappings/{mappingId}/verify",
+                null);
+
+            Assert.Equal(
+                HttpStatusCode.OK,
+                verifyResponse.StatusCode);
+        }
+
+        // The two verified suppliers exceed int.MaxValue when combined.
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            $"{supplierA},Battery Supplier A,{int.MaxValue}\n" +
+            $"{supplierB},Battery Supplier B,1\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            $"{shopifySku},Battery,Main,2\n";
+
+        using var content = new MultipartFormDataContent();
+
+        content.Add(
+            new ByteArrayContent(
+                System.Text.Encoding.UTF8.GetBytes(lightspeedCsv)),
+            "lightspeedFile",
+            "lightspeed.csv");
+
+        content.Add(
+            new ByteArrayContent(
+            System.Text.Encoding.UTF8.GetBytes(shopifyCsv)),
+            "shopifyFile",
+            "shopify.csv");
+
+        using var response = await _client.PostAsync(
+            "/api/reconciliation?detailed=true",
+            content);
+
+        // The blocked product must not crash reconciliation.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(
+           await response.Content.ReadAsStringAsync());
+
+        var root = json.RootElement;
+
+        Assert.Equal(
+            0,
+            root.GetProperty("summary")
+                .GetProperty("inventoryUpdatesGenerated")
+               .GetInt32());
+
+        var match = root.GetProperty("matches")[0];
+
+        Assert.Contains(
+            match.GetProperty("reviewReasons").EnumerateArray(),
+            reason => reason.GetString() == "UnverifiedSupplier");
+
+        // Overflowing quantities cannot be represented as a valid int.
+        Assert.Equal(
+            JsonValueKind.Null,
+            match.GetProperty("combinedQuantity").ValueKind);
+
+        // No automatic Shopify quantity may be proposed.
+        Assert.Equal(
+            JsonValueKind.Null,
+            match.GetProperty("proposedQuantity").ValueKind);
+
+        Assert.True(
+            match.GetProperty("requiresReview").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Reconciliation_DetailedJsonAndCsv_AgreeOnApprovedQuantity()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var shopifySku = $"BATTERY-{suffix}";
+        var supplierA = $"BAT-A-{suffix}";
+        var supplierB = $"BAT-B-{suffix}";
+
+        // Create and verify both supplier mappings.
+        foreach (var supplier in new[] { supplierA, supplierB })
+        {
+            using var createResponse = await _client.PostAsJsonAsync(
+                "/api/sku-mappings",
+                new
+                {
+                    LightspeedPartNumber = supplier,
+                    ShopifySku = shopifySku
+                });
+
+            Assert.Equal(
+                HttpStatusCode.Created,
+                createResponse.StatusCode);
+
+            using var createdJson = JsonDocument.Parse(
+                await createResponse.Content.ReadAsStringAsync());
+
+            var mappingId = createdJson.RootElement
+                .GetProperty("id")
+                .GetGuid();
+
+            using var verifyResponse = await _client.PatchAsync(
+                $"/api/sku-mappings/{mappingId}/verify",
+                null);
+
+            Assert.Equal(
+                HttpStatusCode.OK,
+                verifyResponse.StatusCode);
+        }
+
+        var lightspeedCsv =
+            "Part Number,Description,Qty\n" +
+            $"{supplierA},Battery Supplier A,5\n" +
+            $"{supplierB},Battery Supplier B,3\n";
+
+        var shopifyCsv =
+            "SKU,Title,Location,On hand (current)\n" +
+            $"{shopifySku},Battery,Main,2\n";
+
+        // Build a fresh upload for each API request.
+        MultipartFormDataContent CreateUpload()
+        {
+            var content = new MultipartFormDataContent();
+
+            content.Add(
+                new ByteArrayContent(
+                    System.Text.Encoding.UTF8.GetBytes(lightspeedCsv)),
+                "lightspeedFile",
+                "lightspeed.csv");
+
+            content.Add(
+                new ByteArrayContent(
+                    System.Text.Encoding.UTF8.GetBytes(shopifyCsv)),
+                "shopifyFile",
+                "shopify.csv");
+
+            return content;
+        }
+
+        // Request detailed JSON.
+        using var detailedUpload = CreateUpload();
+
+        using var detailedResponse = await _client.PostAsync(
+            "/api/reconciliation?detailed=true",
+            detailedUpload);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            detailedResponse.StatusCode);
+
+        using var json = JsonDocument.Parse(
+            await detailedResponse.Content.ReadAsStringAsync());
+
+        var root = json.RootElement;
+
+        Assert.Equal(
+            1,
+            root.GetProperty("summary")
+                .GetProperty("inventoryUpdatesGenerated")
+                .GetInt32());
+
+        var match = root.GetProperty("matches")[0];
+
+        Assert.Equal(
+            8,
+            match.GetProperty("combinedQuantity").GetInt32());
+
+        var jsonProposedQuantity = match
+            .GetProperty("proposedQuantity")
+            .GetInt32();
+
+        Assert.Equal(8, jsonProposedQuantity);
+
+        Assert.False(
+            match.GetProperty("requiresReview").GetBoolean());
+
+        // Request CSV diagnostics using the same inventory data.
+        using var csvUpload = CreateUpload();
+
+        using var csvResponse = await _client.PostAsync(
+            "/api/reconciliation?format=csv", csvUpload);
+
+        Assert.Equal(HttpStatusCode.OK, csvResponse.StatusCode);
+
+        var csvText = await csvResponse.Content.ReadAsStringAsync();
+
+        using var reader = new StringReader(csvText);
+
+        using var csv = new CsvHelper.CsvReader(
+            reader, System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.True(csv.Read());
+        csv.ReadHeader();
+
+        Assert.True(csv.Read());
+
+        Assert.Equal(shopifySku, csv.GetField("Shopify SKU"));
+
+        Assert.Equal("8", csv.GetField("Combined Quantity"));
+
+        var csvProposedQuantity = int.Parse(
+            csv.GetField("Proposed Quantity")!);
+
+        // JSON and CSV must agree on the approved quantity.
+        Assert.Equal(jsonProposedQuantity, csvProposedQuantity);
+
+        Assert.Equal("False", csv.GetField("Requires Review"));
+
+        Assert.False(csv.Read());
+    }
 }

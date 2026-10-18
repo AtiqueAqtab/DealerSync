@@ -14,6 +14,9 @@ public class InventoryMatch
     // New: all Lightspeed records contributing to this Shopify item.
     public List<InventoryContributor> Contributors { get; set; } = [];
 
+    // Reasons this Shopify product requires manual review.
+    public List<InventoryReviewReason> ReviewReasons { get; set; } = [];
+
     // New: combined quantity, when contributors are available.
     public int? CombinedQuantity
     {
