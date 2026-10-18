@@ -88,6 +88,12 @@ Expected outcome: a staff-facing local reconciliation workflow showing current S
 
 Evidence: `frontend/src/features/dashboard`, `frontend/src/features/reconciliation`, `frontend/src/features/mappings`, `frontend/src/features/inventory`, `frontend/src/lib/csvExport.ts`, API DTOs, Core matching/diagnostic services, and backend regression tests. Related commits are `e17b4c6`, `296300f`, `36270c3`, and `c5c1fda`.
 
+#### Playwright Step 1
+
+The first browser test now runs one exact-match reconciliation against a separate API and disposable PostgreSQL container. It verifies current quantity `2`, calculated quantity `7`, and approved quantity `7`. The smoke test, its TypeScript check, frontend build/lint, and all 104 existing backend tests passed during implementation. SIGTERM cleanup was also checked, and no E2E runner containers remained afterward.
+
+This covers the initial environment and smoke test only. The multi-supplier safety scenarios, mapping workflows, broader UI behavior, and CI remain pending. See [TESTING.md](TESTING.md) for local commands and isolation details. The baseline inventory above describes the repository before this infrastructure was added.
+
 #### Remaining v0.3 work
 
 1. Agree on automated browser tooling and cover upload-to-results, mapping verification followed by a new reconciliation, blocked updates, approved zero, and diagnostics download. Exercise loading and failure states and record the manual search/filter checks.

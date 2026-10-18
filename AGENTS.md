@@ -19,7 +19,7 @@ When this document was prepared, v0.3.0 is in development on `feature/multi-supp
 
 - Backend: C# and .NET 10, ASP.NET Core Minimal APIs, EF Core, PostgreSQL/Npgsql, and CsvHelper.
 - Frontend: React, TypeScript, Vite, React Router, Tailwind CSS, Lucide icons, and ESLint.
-- Testing: xUnit and PostgreSQL integration tests using Testcontainers. Docker must be available for those tests. No automated browser test runner is configured when this document was prepared.
+- Testing: xUnit and PostgreSQL integration tests using Testcontainers. Docker must be available for those tests. Playwright now provides one real Chromium reconciliation smoke test; see `docs/TESTING.md`. Broader browser coverage remains pending.
 - `backend/DealerSync.Core`: domain models, matching, quantity aggregation, diagnostics, and approved update generation. Keep database, HTTP, and UI concerns out of Core.
 - `backend/DealerSync.Infrastructure`: CSV import/export, reconciliation orchestration, EF Core persistence, repositories, and migrations.
 - `backend/DealerSync.Api`: endpoint validation, DTOs, dependency registration, and calls into application services.

@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright reports and browser artifacts
+playwright-report/
+test-results/
