@@ -1,10 +1,13 @@
-import {useMemo, useState} from "react";
+import {useMemo, useRef, useState} from "react";
 
 import {Link2, RefreshCw, Search} from "lucide-react";
 
 import {useSkuMappings} from "../../hooks/useSkuMappings";
 
 import CreateMappingForm from "./CreateMappingForm";
+import {verifySkuMapping} from "../../api/skuMappings";
+import {useReconciliation} from "../../hooks/useReconciliation";
+import type {SkuMapping} from "../../types/skuMapping";
 
 type MappingFilter = "all" | "verified" | "unverified";
 
@@ -14,10 +17,45 @@ export default function MappingsPage() {
         loading,
         error,
         refreshMappings,
+        updateMapping,
     } = useSkuMappings();
 
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState<MappingFilter>("all");
+    const [verifyingId, setVerifyingId] = useState<string | null>(null);
+    const verificationInProgress = useRef(false);
+    const [verificationError, setVerificationError] = useState<string | null>(null);
+    const [verificationSuccess, setVerificationSuccess] = useState<string | null>(null);
+    const {setResult} = useReconciliation();
+
+    const handleVerify = async (mapping: SkuMapping) => {
+        if (mapping.isVerified || verificationInProgress.current || loading) return;
+
+        verificationInProgress.current = true;
+        setVerifyingId(mapping.id);
+        setVerificationError(null);
+        setVerificationSuccess(null);
+
+        try {
+            const updated = await verifySkuMapping(mapping.id);
+            if (updated.id !== mapping.id || !updated.isVerified) {
+                throw new Error("Verification was not confirmed. Refresh the mappings and try again.");
+            }
+            updateMapping(updated);
+            // A mapping change makes the previous reconciliation results stale.
+            setResult(null);
+            setVerificationSuccess(
+                `Verified ${updated.lightspeedPartNumber} for ${updated.shopifySku}. Run reconciliation again to use this mapping.`
+            );
+        } catch (err) {
+            setVerificationError(
+                `Could not verify ${mapping.lightspeedPartNumber}: ${err instanceof Error ? err.message : "An unexpected error occurred."}`
+            );
+        } finally {
+            verificationInProgress.current = false;
+            setVerifyingId(null);
+        }
+    };
 
     const verifiedCount = mappings.filter(
         (mapping) => mapping.isVerified
@@ -61,13 +99,29 @@ export default function MappingsPage() {
                 <button
                     type="button"
                     onClick={() => void refreshMappings()}
-                    disabled={loading}
+                    disabled={loading || verifyingId !== null}
                     className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                     <RefreshCw size={16}/>
                     Refresh
                 </button>
             </section>
+
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+                Verify a mapping after confirming that both identifiers refer to the same product.
+                Verification makes it eligible for future reconciliation runs.
+            </p>
+
+            {verificationError && (
+                <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                    {verificationError}
+                </p>
+            )}
+            {verificationSuccess && (
+                <p role="status" className="text-sm text-emerald-600 dark:text-emerald-400">
+                    {verificationSuccess}
+                </p>
+            )}
 
             {/* Statistics */}
             <section className="grid gap-4 sm:grid-cols-3">
@@ -188,6 +242,9 @@ export default function MappingsPage() {
                                     <th scope="col" className="px-6 py-4">
                                         Created
                                     </th>
+                                    <th scope="col" className="px-6 py-4">
+                                        Actions
+                                    </th>
                                 </tr>
                                 </thead>
 
@@ -221,6 +278,24 @@ export default function MappingsPage() {
 
                                         <td className="whitespace-nowrap px-6 py-4 text-slate-500 dark:text-slate-400">
                                             {new Date(mapping.createdAt).toLocaleDateString()}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {mapping.isVerified ? (
+                                                <span className="text-sm text-slate-500 dark:text-slate-400">
+                                                    Verified
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleVerify(mapping)}
+                                                    disabled={verifyingId !== null || loading}
+                                                    aria-label={`Verify mapping from ${mapping.lightspeedPartNumber} to ${mapping.shopifySku}`}
+                                                    aria-busy={verifyingId === mapping.id}
+                                                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    {verifyingId === mapping.id ? "Verifying..." : "Verify"}
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

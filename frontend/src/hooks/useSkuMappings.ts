@@ -60,7 +60,14 @@ export function useSkuMappings() {
         };
     }, []);
 
+    const updateMapping = useCallback((updated: SkuMapping) => {
+        setMappings((current) => current.map((mapping) =>
+            mapping.id === updated.id ? updated : mapping
+        ));
+    }, []);
+
     return {
+        updateMapping,
         mappings,
         loading,
         error,
