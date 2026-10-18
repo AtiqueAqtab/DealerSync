@@ -5,7 +5,18 @@ interface ReconciliationResultsTableProps {
     matches: ReconciliationMatch[];
 }
 
-type MatchFilter = "all" | "review" | "unmatched" | "ready";
+type MatchFilter = "all" | "review" | "unmatched" | "ready" | "approved" | "multiple";
+
+function formatReviewReason(reason: string): string {
+    switch (reason) {
+        case "UnverifiedSupplier":
+            return "Supplier mapping is unverified";
+        case "MissingSupplierInventory":
+            return "Mapped supplier inventory is missing";
+        default:
+            return reason;
+    }
+}
 
 export default function ReconciliationResultsTable({
                                                        matches,
@@ -25,7 +36,11 @@ export default function ReconciliationResultsTable({
                 match.shopifyTitle.toLowerCase().includes(query) ||
                 (match.lightspeedPartNumber ?? "")
                     .toLowerCase()
-                    .includes(query);
+                    .includes(query) ||
+                match.location.toLowerCase().includes(query) ||
+                match.contributors.some((contributor) =>
+                    contributor.partNumber.toLowerCase().includes(query)
+                );
 
             const matchesFilter =
                 filter === "all" ||
@@ -33,7 +48,10 @@ export default function ReconciliationResultsTable({
                 (filter === "unmatched" &&
                     match.diagnosticStatus === "MappingRequired") ||
                 (filter === "ready" &&
-                    match.diagnosticStatus === "Ready");
+                    match.diagnosticStatus === "Ready") ||
+                (filter === "approved" &&
+                    match.proposedQuantity !== null && !match.requiresReview) ||
+                (filter === "multiple" && match.contributors.length > 1);
 
             return matchesSearch && matchesFilter;
         });
@@ -72,6 +90,10 @@ export default function ReconciliationResultsTable({
                     Review matched products, quantity differences,
                     and records requiring attention.
                 </p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Combined quantity is supplier inventory. Approved quantity appears
+                    only when the backend generated an update; a dash means no approved update.
+                </p>
             </div>
 
             {/* Search and filters */}
@@ -82,7 +104,7 @@ export default function ReconciliationResultsTable({
                     onChange={(event) =>
                         handleSearchChange(event.target.value)
                     }
-                    placeholder="Search SKU or product..."
+                    placeholder="Search SKU, product, supplier part, or location..."
                     aria-label="Search inventory matches"
                     className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 />
@@ -101,6 +123,8 @@ export default function ReconciliationResultsTable({
                     <option value="review">Requires Review</option>
                     <option value="unmatched">Mapping Required</option>
                     <option value="ready">Ready</option>
+                    <option value="approved">Approved Updates</option>
+                    <option value="multiple">Multiple Suppliers</option>
                 </select>
             </div>
 
@@ -116,7 +140,7 @@ export default function ReconciliationResultsTable({
                                 Shopify SKU
                             </th>
                             <th scope="col" className="px-5 py-4">
-                                Lightspeed SKU
+                                Supplier Contributions
                             </th>
                             <th scope="col" className="px-5 py-4">
                                 Match Type
@@ -125,7 +149,10 @@ export default function ReconciliationResultsTable({
                                 Current Qty
                             </th>
                             <th scope="col" className="px-5 py-4">
-                                Proposed Qty
+                                Combined Qty
+                            </th>
+                            <th scope="col" className="px-5 py-4">
+                                Approved Qty
                             </th>
                             <th scope="col" className="px-5 py-4">
                                 Status
@@ -147,10 +174,24 @@ export default function ReconciliationResultsTable({
                                     <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                         {match.shopifyTitle}
                                     </div>
+                                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                        Location: {match.location}
+                                    </div>
                                 </td>
 
                                 <td className="px-5 py-4 text-slate-600 dark:text-slate-300">
-                                    {match.lightspeedPartNumber ?? "—"}
+                                    {match.contributors.length > 0 ? (
+                                        <ul className="min-w-48 space-y-2">
+                                            {match.contributors.map((contributor, contributorIndex) => (
+                                                <li key={`${contributor.partNumber}-${contributorIndex}`}>
+                                                    <div className="font-medium">{contributor.partNumber}</div>
+                                                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                        Qty: {contributor.quantity.toLocaleString()} · {contributor.matchType}
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (match.lightspeedPartNumber ?? "—")}
                                 </td>
 
                                 <td className="px-5 py-4 text-slate-600 dark:text-slate-300">
@@ -162,21 +203,41 @@ export default function ReconciliationResultsTable({
                                 </td>
 
                                 <td className="px-5 py-4 text-slate-600 dark:text-slate-300">
-                                    {match.proposedQuantity ?? "—"}
+                                    {match.combinedQuantity?.toLocaleString() ?? "—"}
+                                </td>
+
+                                <td className="px-5 py-4 text-slate-600 dark:text-slate-300">
+                                    {match.proposedQuantity?.toLocaleString() ?? "—"}
                                 </td>
 
                                 <td className="px-5 py-4">
                                         <span
                                             className={
-                                                match.diagnosticStatus === "Ready"
-                                                    ? "font-medium text-green-600 dark:text-green-400"
-                                                    : match.diagnosticStatus === "ReviewRecommended"
-                                                        ? "font-medium text-amber-600 dark:text-amber-400"
-                                                        : "font-medium text-red-600 dark:text-red-400"
+                                                match.requiresReview
+                                                    ? "font-medium text-amber-600 dark:text-amber-400"
+                                                    : match.diagnosticStatus === "Ready"
+                                                        ? "font-medium text-green-600 dark:text-green-400"
+                                                        : match.diagnosticStatus === "ReviewRecommended"
+                                                            ? "font-medium text-amber-600 dark:text-amber-400"
+                                                            : "font-medium text-red-600 dark:text-red-400"
                                             }
                                         >
                                             {match.diagnosticStatus}
                                         </span>
+                                    {match.requiresReview && (
+                                        <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                                            Requires review
+                                        </p>
+                                    )}
+                                    {match.reviewReasons.length > 0 && (
+                                        <ul className="mt-2 min-w-48 list-disc space-y-1 pl-4 text-xs text-amber-700 dark:text-amber-400">
+                                            {match.reviewReasons.map((reason, reasonIndex) => (
+                                                <li key={`${reason}-${reasonIndex}`}>
+                                                    {formatReviewReason(reason)}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -203,7 +264,7 @@ export default function ReconciliationResultsTable({
                             type="button"
                             disabled={currentPage === 1}
                             onClick={() =>
-                                setPage((current) => Math.max(1, current - 1))
+                                setPage(Math.max(1, currentPage - 1))
                             }
                             className="rounded-md border border-slate-300 px-3 py-1.5 text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200"
                         >
@@ -218,9 +279,7 @@ export default function ReconciliationResultsTable({
                             type="button"
                             disabled={currentPage === pageCount}
                             onClick={() =>
-                                setPage((current) =>
-                                    Math.min(pageCount, current + 1)
-                                )
+                                setPage(Math.min(pageCount, currentPage + 1))
                             }
                             className="rounded-md border border-slate-300 px-3 py-1.5 text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200"
                         >
