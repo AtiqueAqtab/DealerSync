@@ -1,15 +1,7 @@
-import {expect, test} from '@playwright/test';
+import {expect, test} from './support';
 import {fileURLToPath} from 'node:url';
 
-test('uploads synthetic CSVs and displays approved reconciliation quantities', async ({page, context, baseURL}) => {
-    const externalRequests: string[] = [];
-    await context.route('**/*', async (route) => {
-        const url = new URL(route.request().url());
-        if (url.origin === baseURL) return route.continue();
-        externalRequests.push(url.origin);
-        return route.abort('blockedbyclient');
-    });
-
+test('uploads synthetic CSVs and displays approved reconciliation quantities', async ({page}) => {
     await page.goto('/reconcile');
     const run = page.getByRole('button', {name: 'Run Reconciliation', exact: true});
     await expect(run).toBeDisabled();
@@ -45,5 +37,4 @@ test('uploads synthetic CSVs and displays approved reconciliation quantities', a
     await expect(cells.nth(4)).toHaveText('7');
     await expect(cells.nth(5)).toHaveText('7');
     await expect(cells.nth(6)).toHaveText('Ready');
-    expect(externalRequests).toEqual([]);
 });

@@ -92,18 +92,30 @@ Evidence: `frontend/src/features/dashboard`, `frontend/src/features/reconciliati
 
 The first browser test now runs one exact-match reconciliation against a separate API and disposable PostgreSQL container. It verifies current quantity `2`, calculated quantity `7`, and approved quantity `7`. The smoke test, its TypeScript check, frontend build/lint, and all 104 existing backend tests passed during implementation. SIGTERM cleanup was also checked, and no E2E runner containers remained afterward.
 
-This covers the initial environment and smoke test only. The multi-supplier safety scenarios, mapping workflows, broader UI behavior, and CI remain pending. See [TESTING.md](TESTING.md) for local commands and isolation details. The baseline inventory above describes the repository before this infrastructure was added.
+Step 1 established the environment and exact-match smoke test. Step 2A adds the supplier scenarios described below. Mapping UI workflows, broader UI behavior, invalid quantities, and CI remain pending. See [TESTING.md](TESTING.md) for local commands and isolation details. The baseline inventory above describes the repository before this infrastructure was added.
+
+#### Playwright Step 2A: Multi-supplier inventory safety
+
+Three additional browser tests use the real frontend, API, and disposable PostgreSQL database. They create mappings through the existing API, verify the intended suppliers, and reconcile synthetic CSVs through the browser.
+
+- Two verified suppliers with quantities 3 and 4 produce combined and approved quantities of 7 and one eligible update.
+- An unverified second supplier is excluded from the combined quantity. The verified contribution is 3, the approved quantity is null, and `UnverifiedSupplier` blocks updates.
+- A missing verified supplier leaves the available contribution at 3, with a null approved quantity and `MissingSupplierInventory` blocking updates.
+
+Each scenario checks the actual API contract, visible supplier contributions and quantities, and inclusion or exclusion under Approved Updates. The missing-supplier response flags the reason but does not name the missing part; the test verifies the omitted supplier's persisted mapping as part of setup.
+
+Per-test SKU namespaces keep mappings independent without reset SQL. The existing runner still owns the separate API, frontend, and temporary database. All four browser tests, 104 existing backend tests, the frontend production build, lint, and test TypeScript checks passed during this step. The supplier scenarios also passed in reverse order against a fresh isolated stack. The full end-to-end acceptance milestone remains open. See [TESTING.md](TESTING.md) for fixtures, expected values, and commands.
 
 #### Remaining v0.3 work
 
-1. Agree on automated browser tooling and cover upload-to-results, mapping verification followed by a new reconciliation, blocked updates, approved zero, and diagnostics download. Exercise loading and failure states and record the manual search/filter checks.
+1. Extend the existing Playwright suite to cover mapping verification through the UI followed by a new reconciliation, invalid quantities, approved zero, diagnostics download, and loading/failure states. Complete search/filter/pagination coverage and decide the History page scope. Upload-to-results and the three Step 2A supplier scenarios already have real-service coverage.
 2. Run the final backend and frontend checks against the intended release revision. Confirm that fresh-database setup and upgrade instructions include the multi-supplier migration.
 3. Update the README/current-version information and record release notes, known limitations, setup steps, and synthetic test instructions.
 4. Review the pull request, obtain approval to merge and tag, and verify the target environment if deployment is part of this release. Do not infer deployment from a Git push.
 
 Scope decisions: the supplied v0.3 milestone says CSV uploads, not drag-and-drop specifically, and does not explicitly require a dedicated History page. The older README proposed both drag-and-drop and history UI. Confirm whether those older proposals remain release requirements before adding them. Settings is not an agreed v0.3 requirement. A History page can initially show saved summaries without promising historical item-level details.
 
-Suggested next task: add a small automated browser test suite for the verified v0.3 safety workflows. Explain the tooling and fixture/database approach first, then obtain approval before implementation. If the author confirms History is a v0.3 requirement, plan that page as a separate task using the existing summaries API.
+Suggested next task: agree on the next small acceptance-testing step, such as invalid-quantity and approved-zero coverage. Explain the fixtures and expected backend behavior before implementation, then obtain approval. If the author confirms History is a v0.3 requirement, plan that page as a separate task using the existing summaries API.
 
 ### v0.4.0 — Reliability, Security and Workflow Improvements
 

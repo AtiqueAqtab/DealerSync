@@ -1,0 +1,2 @@
+Handle,Title,Option1 Name,Option1 Value,SKU,Location,On hand (current),On hand (new)
+e2e-suppliers,Synthetic supplier safety product,Title,Default Title,{{CASE}}-SHOPIFY,E2E Test Location,2,

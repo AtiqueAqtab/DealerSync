@@ -227,7 +227,7 @@ try {
         });
         return response.ok && JSON.stringify(await response.json()) === '[]';
     }, 'the frontend proxy and test API', vite);
-    console.log('[e2e] Running one Chromium reconciliation test against the isolated stack.');
+    console.log('[e2e] Running Chromium reconciliation tests against the isolated stack.');
     await run(process.execPath, [
         'node_modules/@playwright/test/cli.js', 'test', ...process.argv.slice(2),
     ], {cwd: frontend, env: browserEnvironment});

@@ -8,7 +8,7 @@ if (!process.env.DEALERSYNC_E2E_RUN_ID || !baseURL ||
 
 export default defineConfig({
     testDir: './e2e',
-    testMatch: 'reconciliation.spec.ts',
+    testMatch: '*.spec.ts',
     fullyParallel: false,
     workers: 1,
     retries: 0,
