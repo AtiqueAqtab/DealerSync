@@ -1,4 +1,5 @@
 import {test, expect, createSupplierMapping, reconcileSuppliers} from './support';
+import {downloadDiagnostics} from './diagnostics';
 
 const scenarios = [
     {
@@ -79,6 +80,20 @@ for (const scenario of scenarios) {
         } else {
             await expect(cells.nth(6).getByText('Requires review', {exact: true})).toHaveCount(0);
         }
+
+        const exported = await downloadDiagnostics(page);
+        expect(exported).toHaveLength(1);
+        expect(exported[0]).toMatchObject({
+            'Shopify SKU': inventory.shopifySku,
+            'Current Quantity': '2', 'Combined Quantity': String(scenario.combined),
+            'Proposed Quantity': scenario.approved === null ? '' : String(scenario.approved),
+            'Inventory Difference': 'true', 'Diagnostic Status': scenario.status,
+            'Requires Review': String(scenario.reason !== null),
+            'Contributor Count': String(expectedContributions.length),
+        });
+        expect(JSON.parse(exported[0]['Contributors'])).toEqual(expect.arrayContaining(expectedContributions));
+        expect(JSON.parse(exported[0]['Contributors'])).toHaveLength(expectedContributions.length);
+        expect(JSON.parse(exported[0]['Review Reasons'])).toEqual(scenario.reason ? [scenario.reason] : []);
 
         // Guard the actual approval-facing UI, not just its diagnostic status label.
         await page.getByRole('combobox', {name: 'Filter inventory matches'}).selectOption('approved');

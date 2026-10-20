@@ -92,7 +92,7 @@ Evidence: `frontend/src/features/dashboard`, `frontend/src/features/reconciliati
 
 The first browser test now runs one exact-match reconciliation against a separate API and disposable PostgreSQL container. It verifies current quantity `2`, calculated quantity `7`, and approved quantity `7`. The smoke test, its TypeScript check, frontend build/lint, and all 104 existing backend tests passed during implementation. SIGTERM cleanup was also checked, and no E2E runner containers remained afterward.
 
-Step 1 established the environment and exact-match smoke test. Step 2A adds the supplier scenarios described below. Mapping UI workflows, broader UI behavior, invalid quantities, and CI remain pending. See [TESTING.md](TESTING.md) for local commands and isolation details. The baseline inventory above describes the repository before this infrastructure was added.
+Step 1 established the environment and exact-match smoke test. Steps 2A and 2B cover supplier safety, quantity validation, and diagnostic downloads as described below. Mapping UI workflows, broader UI behavior, and CI remain pending. See [TESTING.md](TESTING.md) for local commands and isolation details. The baseline inventory above describes the repository before this infrastructure was added.
 
 #### Playwright Step 2A: Multi-supplier inventory safety
 
@@ -106,16 +106,26 @@ Each scenario checks the actual API contract, visible supplier contributions and
 
 Per-test SKU namespaces keep mappings independent without reset SQL. The existing runner still owns the separate API, frontend, and temporary database. All four browser tests, 104 existing backend tests, the frontend production build, lint, and test TypeScript checks passed during this step. The supplier scenarios also passed in reverse order against a fresh isolated stack. The full end-to-end acceptance milestone remains open. See [TESTING.md](TESTING.md) for fixtures, expected values, and commands.
 
+#### Playwright Step 2B: Quantity validation and diagnostics
+
+Eight additional browser tests cover positive and negative supplier stock together, approved zero, four representative malformed inputs, fully verified aggregate overflow, and CSV text/formula protection. The three Step 2A supplier tests also check actual frontend downloads for calculated quantities, blank blocked approvals, statuses, reasons, and contributions. A test-only CSV parser checks the downloaded file independently of the exporter.
+
+The negative-stock case returns combined 5 and null approval for contributions of 7 and -2. Approved zero remains 0 in the API, table, Approved Updates filter, and export. Malformed quantities return HTTP 400. Fully verified quantities of 2147483647 and 1 also return HTTP 400 rather than generating an unsafe update; existing xUnit coverage separately handles overflow in a product blocked by an unverified mapping.
+
+The current overflow message describes conflicting data, the frontend displays errors as raw JSON text, and negative stock has `InvalidQuantity` with an empty mapping-reason array. These behaviors are documented in [TESTING.md](TESTING.md); production validation and business logic are unchanged. Full acceptance and release preparation remain open.
+
+Validation passed all 12 browser tests and 104 existing backend tests, the frontend production build with environment-file loading disabled, lint, test TypeScript checks, and `git diff --check`. The runner removed its owned container; a separate Docker check found no remaining E2E containers. These results establish the tested cases, not completion of v0.3 acceptance.
+
 #### Remaining v0.3 work
 
-1. Extend the existing Playwright suite to cover mapping verification through the UI followed by a new reconciliation, invalid quantities, approved zero, diagnostics download, and loading/failure states. Complete search/filter/pagination coverage and decide the History page scope. Upload-to-results and the three Step 2A supplier scenarios already have real-service coverage.
+1. Extend the existing Playwright suite to cover mapping verification through the UI followed by a new reconciliation, stale-result invalidation, and loading/failure recovery states. Complete search/filter/pagination coverage and decide the History page scope. Upload-to-results, supplier safety, representative quantity validation, approved zero, and diagnostic downloads have real-service coverage.
 2. Run the final backend and frontend checks against the intended release revision. Confirm that fresh-database setup and upgrade instructions include the multi-supplier migration.
 3. Update the README/current-version information and record release notes, known limitations, setup steps, and synthetic test instructions.
 4. Review the pull request, obtain approval to merge and tag, and verify the target environment if deployment is part of this release. Do not infer deployment from a Git push.
 
 Scope decisions: the supplied v0.3 milestone says CSV uploads, not drag-and-drop specifically, and does not explicitly require a dedicated History page. The older README proposed both drag-and-drop and history UI. Confirm whether those older proposals remain release requirements before adding them. Settings is not an agreed v0.3 requirement. A History page can initially show saved summaries without promising historical item-level details.
 
-Suggested next task: agree on the next small acceptance-testing step, such as invalid-quantity and approved-zero coverage. Explain the fixtures and expected backend behavior before implementation, then obtain approval. If the author confirms History is a v0.3 requirement, plan that page as a separate task using the existing summaries API.
+Suggested next task: test mapping creation and verification through the UI, confirm stale reconciliation results are cleared, and upload the same synthetic inventory again to verify the newly approved quantity. Obtain approval before implementation. If the author confirms History is a v0.3 requirement, plan that page as a separate task using the existing summaries API.
 
 ### v0.4.0 — Reliability, Security and Workflow Improvements
 

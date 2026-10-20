@@ -62,24 +62,38 @@ export async function createSupplierMapping(
     });
 }
 
-export async function reconcileSuppliers(page: Page, inventory: InventoryCase, lightspeedFile: string) {
-    const file = async (name: string) => ({
-        name,
-        mimeType: 'text/csv',
-        buffer: Buffer.from((await readFile(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'))
-            .replaceAll('{{CASE}}', inventory.namespace)),
-    });
+export async function uploadInventory(
+    page: Page, inventory: InventoryCase, lightspeedFile: string,
+    shopifyFile = 'shopify-suppliers.csv', replacements: Record<string, string> = {},
+) {
+    const file = async (name: string) => {
+        let csv = (await readFile(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'))
+            .replaceAll('{{CASE}}', inventory.namespace);
+        for (const [token, value] of Object.entries(replacements)) csv = csv.replaceAll(token, value);
+        return {
+            name,
+            mimeType: 'text/csv',
+            buffer: Buffer.from(csv),
+        };
+    };
     await page.goto('/reconcile');
     const inputs = page.locator('input[type="file"]');
     await expect(inputs).toHaveCount(2);
     await inputs.nth(0).setInputFiles(await file(lightspeedFile));
-    await inputs.nth(1).setInputFiles(await file('shopify-suppliers.csv'));
+    await inputs.nth(1).setInputFiles(await file(shopifyFile));
 
     const responsePromise = page.waitForResponse((response) =>
         new URL(response.url()).pathname === '/api/reconciliation' &&
         response.request().method() === 'POST');
     await page.getByRole('button', {name: 'Run Reconciliation', exact: true}).click();
-    const response = await responsePromise;
+    return responsePromise;
+}
+
+export async function reconcileSuppliers(
+    page: Page, inventory: InventoryCase, lightspeedFile: string,
+    shopifyFile = 'shopify-suppliers.csv',
+) {
+    const response = await uploadInventory(page, inventory, lightspeedFile, shopifyFile);
     expect(response.status()).toBe(200);
     const result: ReconciliationDetailedResponse = await response.json();
     await expect(page.getByRole('heading', {name: 'Reconciliation Results', exact: true})).toBeVisible();

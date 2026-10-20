@@ -1,0 +1,6 @@
+Part Number,Description,Qty
+{{CASE}}-TEXT,Synthetic quoted text,7
+{{CASE}}-EQUALS,Synthetic equals prefix,7
+{{CASE}}-PLUS,Synthetic plus prefix,7
+{{CASE}}-MINUS,Synthetic minus prefix,7
+{{CASE}}-AT,Synthetic at prefix,7
