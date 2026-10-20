@@ -28,6 +28,11 @@ export default function MappingsPage() {
     const [verificationSuccess, setVerificationSuccess] = useState<string | null>(null);
     const {setResult} = useReconciliation();
 
+    const handleCreated = async () => {
+        setResult(null);
+        await refreshMappings();
+    };
+
     const handleVerify = async (mapping: SkuMapping) => {
         if (mapping.isVerified || verificationInProgress.current || loading) return;
 
@@ -146,7 +151,7 @@ export default function MappingsPage() {
             </section>
 
             {/* Create Mapping */}
-            <CreateMappingForm onCreated={refreshMappings}/>
+            <CreateMappingForm onCreated={handleCreated}/>
 
             {/* Search and filtering */}
             <section className="space-y-4">

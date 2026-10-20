@@ -66,6 +66,15 @@ export async function uploadInventory(
     page: Page, inventory: InventoryCase, lightspeedFile: string,
     shopifyFile = 'shopify-suppliers.csv', replacements: Record<string, string> = {},
 ) {
+    await page.goto('/reconcile');
+    return uploadInventoryOnPage(page, inventory, lightspeedFile, shopifyFile, replacements);
+}
+
+// Use after sidebar navigation when a test must preserve the shared React result.
+export async function uploadInventoryOnPage(
+    page: Page, inventory: InventoryCase, lightspeedFile: string,
+    shopifyFile = 'shopify-suppliers.csv', replacements: Record<string, string> = {},
+) {
     const file = async (name: string) => {
         let csv = (await readFile(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'))
             .replaceAll('{{CASE}}', inventory.namespace);
@@ -76,7 +85,6 @@ export async function uploadInventory(
             buffer: Buffer.from(csv),
         };
     };
-    await page.goto('/reconcile');
     const inputs = page.locator('input[type="file"]');
     await expect(inputs).toHaveCount(2);
     await inputs.nth(0).setInputFiles(await file(lightspeedFile));

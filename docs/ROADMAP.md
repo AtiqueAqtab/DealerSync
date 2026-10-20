@@ -92,7 +92,7 @@ Evidence: `frontend/src/features/dashboard`, `frontend/src/features/reconciliati
 
 The first browser test now runs one exact-match reconciliation against a separate API and disposable PostgreSQL container. It verifies current quantity `2`, calculated quantity `7`, and approved quantity `7`. The smoke test, its TypeScript check, frontend build/lint, and all 104 existing backend tests passed during implementation. SIGTERM cleanup was also checked, and no E2E runner containers remained afterward.
 
-Step 1 established the environment and exact-match smoke test. Steps 2A and 2B cover supplier safety, quantity validation, and diagnostic downloads as described below. Mapping UI workflows, broader UI behavior, and CI remain pending. See [TESTING.md](TESTING.md) for local commands and isolation details. The baseline inventory above describes the repository before this infrastructure was added.
+Step 1 established the environment and exact-match smoke test. Steps 2A, 2B, and 3A cover supplier safety, quantity validation, diagnostic downloads, and mapping creation/verification workflows as described below. Broader UI behavior and CI remain pending. See [TESTING.md](TESTING.md) for local commands and isolation details. The baseline inventory above describes the repository before this infrastructure was added.
 
 #### Playwright Step 2A: Multi-supplier inventory safety
 
@@ -116,16 +116,26 @@ The current overflow message describes conflicting data, the frontend displays e
 
 Validation passed all 12 browser tests and 104 existing backend tests, the frontend production build with environment-file loading disabled, lint, test TypeScript checks, and `git diff --check`. The runner removed its owned container; a separate Docker check found no remaining E2E containers. These results establish the tested cases, not completion of v0.3 acceptance.
 
+#### Playwright Step 3A: SKU mapping workflows
+
+Two additional browser tests create and verify mappings through React controls, independently check persisted state, and reconcile before and after verification. With supplier quantities of 3 and 4 and Shopify stock of 2, the pending supplier leaves combined inventory at 3 and blocks approval. Verifying it clears stored results; a new upload produces combined and approved quantities of 7 and one eligible update.
+
+The regression test reproduced a creation-invalidation defect before the fix: 13 tests passed, but the Inventory page retained an old approval after a new unverified mapping was saved. `MappingsPage` now clears the shared reconciliation result after successful creation, then refreshes the mappings list. A duplicate creation returning HTTP 409 preserves the existing result and download. Backend approval rules and verification's existing invalidation remain unchanged.
+
+The tests reuse existing CSVs, unique test identifiers, and the disposable database runner. Sidebar navigation and uploads on the current page preserve React state so page reloads cannot conceal stale results. No dependencies were added. Cross-tab invalidation and in-flight reconciliation races remain outside this coverage. Full v0.3 acceptance remains open.
+
+Validation passed 14 browser tests, all 104 existing backend tests, the frontend production build with environment-file loading disabled, lint, test TypeScript checks, and `git diff --check`. Cleanup ran after the failing and passing suites; a separate check found no E2E containers or test servers remaining. No Docker volumes were removed.
+
 #### Remaining v0.3 work
 
-1. Extend the existing Playwright suite to cover mapping verification through the UI followed by a new reconciliation, stale-result invalidation, and loading/failure recovery states. Complete search/filter/pagination coverage and decide the History page scope. Upload-to-results, supplier safety, representative quantity validation, approved zero, and diagnostic downloads have real-service coverage.
+1. Plan loading/failure recovery and complete search/filter/pagination coverage. Decide the History page scope. Upload-to-results, supplier safety, representative quantity validation, approved zero, diagnostic downloads, and mapping creation/verification with same-context stale-result invalidation have real-service coverage.
 2. Run the final backend and frontend checks against the intended release revision. Confirm that fresh-database setup and upgrade instructions include the multi-supplier migration.
 3. Update the README/current-version information and record release notes, known limitations, setup steps, and synthetic test instructions.
 4. Review the pull request, obtain approval to merge and tag, and verify the target environment if deployment is part of this release. Do not infer deployment from a Git push.
 
 Scope decisions: the supplied v0.3 milestone says CSV uploads, not drag-and-drop specifically, and does not explicitly require a dedicated History page. The older README proposed both drag-and-drop and history UI. Confirm whether those older proposals remain release requirements before adding them. Settings is not an agreed v0.3 requirement. A History page can initially show saved summaries without promising historical item-level details.
 
-Suggested next task: test mapping creation and verification through the UI, confirm stale reconciliation results are cleared, and upload the same synthetic inventory again to verify the newly approved quantity. Obtain approval before implementation. If the author confirms History is a v0.3 requirement, plan that page as a separate task using the existing summaries API.
+Suggested next task: agree on a small Step 3B scope for loading/failure recovery or broader search/filter/pagination coverage. Obtain approval before implementation. If the author confirms History is a v0.3 requirement, plan that page as a separate task using the existing summaries API.
 
 ### v0.4.0 — Reliability, Security and Workflow Improvements
 
