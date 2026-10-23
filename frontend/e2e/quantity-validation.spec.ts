@@ -8,6 +8,7 @@ async function expectRejectedUpload(page: Page, response: Response, error: strin
     await expect(page.getByRole('alert')).toContainText(error);
     await expect(page.getByRole('heading', {name: 'Reconciliation Results', exact: true})).toHaveCount(0);
     await expect(page.getByRole('button', {name: 'Download Diagnostics CSV', exact: true})).toHaveCount(0);
+    await expect(page.getByRole('button', {name: 'Download Approved Shopify CSV', exact: true})).toHaveCount(0);
 }
 
 test('a negative supplier blocks approval even when the calculated sum is positive', async ({page, request, inventory}) => {

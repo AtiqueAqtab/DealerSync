@@ -43,4 +43,9 @@ export interface ReconciliationMatch {
 export interface ReconciliationDetailedResponse {
     summary: ReconciliationSummary;
     matches: ReconciliationMatch[];
+    approvedInventoryExport: {
+        csv: string | null;
+        error: string | null;
+        updateCount: number;
+    };
 }

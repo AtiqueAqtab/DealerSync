@@ -2,7 +2,7 @@
 
 The first Playwright test uploads two synthetic inventory files through the React reconciliation page. It checks a current Shopify quantity of `2`, a calculated supplier quantity of `7`, and a backend-approved quantity of `7`. The browser talks to the real API and PostgreSQL. No API responses are mocked.
 
-The suite has 14 real-service Chromium tests: the exact-match smoke test, three supplier-safety tests, seven quantity-validation tests, one CSV text/export test, and two mapping-workflow tests. Broader search/pagination coverage, loading/failure recovery, history, and CI integration remain later tasks in the [roadmap](ROADMAP.md).
+The suite has 19 real-service Chromium tests: the exact-match smoke test, three supplier-safety tests, seven quantity-validation tests, one diagnostics text/export test, two mapping-workflow tests, and five approved-export tests. Broader search/pagination coverage, loading/failure recovery, history, and CI integration remain later tasks in the [roadmap](ROADMAP.md).
 
 ## Supplier safety coverage
 
@@ -57,13 +57,51 @@ Clearing results after a successful mapping change is conservative: the user mus
 
 ## Fixtures and test isolation
 
+The approved-export fixtures use the documented Shopify All states identity columns. The mixed fixture includes default,
+one-, two-, and three-option variants, exact location `Ottawa East`, a quoted multiline Unicode title, verified supplier
+aggregation, approved zero, pending and missing suppliers, negative stock, a normalized suggestion, and unchanged stock.
+The browser parses the actual approved download with `csv-parse`, checks all 12 supported update headers and six literal
+expected rows, and compares it with the backend snapshot. Output expectations use spaced `Option 1 Name` /
+`Option 1 Value` headers for all three options; importer tests and unspaced fixtures retain coverage of both input aliases.
+See the [header review in the README](../README.md#approved-shopify-inventory-csvs) for the official documentation
+inconsistency, unavailable template, and limits of compatibility verification. Selecting the Review filter still downloads
+all six approved updates. Changing a source file removes the download.
+
+Three additional browser cases block the whole file for a missing option value, duplicate variant identity under
+different SKUs, or formula-like text. They confirm that approval counts remain visible, the approved download is disabled,
+and diagnostics remain available. Existing mapping workflow tests now check the approved download after invalidation and
+after rejected creation; overflow and malformed-upload tests check that no approved download is offered.
+
+The fifth new browser test fetches a real API response and holds its delivery with a promise. It then navigates away,
+creates a pending mapping through React, releases the response, and checks that no old result or approved download is
+restored. While the response is held, it also checks that both upload inputs and the submit button are disabled.
+File replacement during submission is therefore unavailable through the current UI; the test does not bypass disabled
+controls to simulate a user action. There is no arbitrary delay or mocked approval. Aborting the browser request does
+not claim to cancel backend processing or prevent the historical summary from being saved.
+
+Backend coverage parses generated CSVs with CsvHelper independently of the application exporter. It checks identity
+preservation through import and matching, one/two/three-option values, current/new quantities, malformed identity,
+duplicate headers, exact location casing, ambiguous variants, changed current-stock data, size limits, and diagnostics
+formula escaping. API tests use persisted mappings to check approved/export agreement, pending-supplier exclusion,
+whole-file blocking, and overflow rejection. No external Shopify import is executed; compatibility claims are limited to
+the [published inventory CSV contract](https://help.shopify.com/en/manual/inventory-and-locations/setup/inventory-csv)
+and the representative synthetic cases.
+
+The duplicate-SKU API regression uses two different handles and option values at `Ottawa` with the same SKU.
+Four cases cover identical spelling, different case, surrounding whitespace, and both case and whitespace differences.
+Each case first creates and verifies a saved supplier mapping, then confirms that a valid upload generates an approved
+quantity of 7 and an export. Adding the second variant returns HTTP 400 with no result or approved-export payload,
+including no partial export for an unrelated eligible product in the same upload. The existing matcher rejects duplicate
+SKU/location pairs after trimming and ignoring case, before approval generation. This differs from punctuation-stripping
+SKU normalization used to suggest matches; that suggestion rule does not define duplicate SKU identity.
+
 `frontend/e2e/support.ts` creates an identifier namespace from the run ID, test ID, repeat index, and retry index. Each supplier test receives its own Shopify SKU and two supplier part numbers. The CSV templates in `frontend/e2e/fixtures/` contain explicit quantities for supplier, negative, zero, overflow, and text cases. The helper replaces `{{CASE}}` with that test's namespace. Only malformed-input templates use quantity placeholders; the tests supply the four literal invalid values above and valid values for the other upload.
 
 The mapping helper calls the real `POST /api/sku-mappings` endpoint. New mappings must be unverified. For verified suppliers, it calls `PATCH /api/sku-mappings/{id}/verify`. A subsequent GET checks that the requested verification state was persisted, including when B must remain unverified.
 
 Tests share the runner's disposable database, but do not share identifiers or assume an empty mappings table. Quantity and supplier cases each upload one Shopify product; the text/export case uploads five distinct exact-match products. They can run in any order without claiming another test's inventory or mappings. No per-test deletion or database reset is performed; all records disappear when the runner removes its own container. Keep the existing single-worker configuration for this stage. Step 2A was checked in both the declared and reversed supplier-scenario order.
 
-The shared browser fixture blocks requests outside the isolated frontend origin for all 14 tests. The upload helpers use the real reconciliation page and read the response to its POST; they do not call reconciliation in place of browser interaction.
+The shared browser fixture blocks requests outside the isolated frontend origin for all 19 tests. The upload helpers use the real reconciliation page and read the response to its POST; they do not call reconciliation in place of browser interaction. The late-response test routes only the local reconciliation request and forwards it to the real backend before holding delivery.
 
 Assertions check the backend summary and per-product contract, rendered quantities, contribution part numbers and quantities, and review messages. For blocked products, the detailed response has `proposedQuantity: null` and `inventoryUpdatesGenerated: 0`. Because the input contains one Shopify product, that zero applies to the tested SKU. The response does not expose a separate inventory-update collection. The Approved Updates filter must also hide the blocked row, preventing the calculated value from being presented as an approved update.
 
@@ -104,12 +142,19 @@ The command type-checks the test code and then:
 2. Verifies the container label, storage type, and live database name before applying the existing EF migrations. It does not reset a schema or delete records.
 3. Starts a separate API process in the `Testing` environment with an explicit test connection string and a temporary content directory. Development launch profiles and user-secret configuration are not used.
 4. Starts Vite with the existing application plugins and a test-only proxy target. The test configuration disables `.env` file loading. Both servers use automatically selected loopback ports.
-5. Waits for a database-backed request through the frontend proxy, runs 14 Chromium tests, and checks API responses, visible results, and downloaded CSVs.
+5. Waits for a database-backed request through the frontend proxy, runs 19 Chromium tests, and checks API responses, visible results, and downloaded CSVs.
 6. Stops the process groups it started and removes only the container whose identity and ownership label match this run. It does not remove Docker volumes.
 
 No normal development server needs to be stopped. The runner does not reuse it, read the development `.env`, load private inventory files, or call Shopify. The browser blocks requests outside its test frontend origin. The CSV fixtures are committed under `frontend/e2e/fixtures/`.
 
 ## Results and failures
+
+The safe-export milestone, including the four duplicate-SKU API regression cases, passed 19 browser tests and
+143 backend tests, including the recorded 14/104 baseline. The duplicate-SKU review required no production changes.
+The backend build, frontend production build with environment-file loading disabled, lint, test TypeScript checks,
+and `git diff --check` passed. Docker was initially stopped, so the first backend run could not initialize integration
+fixtures; the full suite passed after Docker Desktop started. The runner's labelled container and test server processes
+were absent after completion, and no volumes were removed. No dependencies or migrations were added.
 
 Step 3A validation passed all 14 browser tests and 104 existing backend tests, the production build with environment-file loading disabled, lint, test TypeScript checks, and `git diff --check`. The runner cleaned up after both the reproduced regression failure and the fixed run. A separate Docker/process check found no remaining E2E containers or test servers. No volumes were removed. Only the mapping page's successful-creation callback changed in production; no backend code or approval rules changed.
 
@@ -144,7 +189,7 @@ npm --prefix frontend run test:e2e:types
 
 The backend integration tests already create their own PostgreSQL Testcontainers. The browser runner creates a separate database because a browser needs an API listening on a real network port; the xUnit in-process server is not reachable from Chromium.
 
-Backend tests, frontend build/lint, and the browser suite check different behavior. These 14 browser tests do not complete v0.3's full end-to-end acceptance plan.
+Backend tests, frontend build/lint, and the browser suite check different behavior. These 19 browser tests do not complete v0.3's full end-to-end acceptance plan.
 
 For a production-build check that also disables environment-file loading, run this from `frontend/`. These values are unused loopback addresses during a build; the command does not start servers.
 

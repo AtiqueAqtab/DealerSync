@@ -452,6 +452,7 @@ public class SkuMatchingService
 
             updates.Add(new InventoryUpdate
             {
+                ExportIdentity = match.ShopifyItem.ExportIdentity,
                 Sku = match.ShopifyItem.Sku,
                 Title = match.ShopifyItem.Title,
                 Location = match.ShopifyItem.Location,

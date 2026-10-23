@@ -87,10 +87,10 @@ public class ReconciliationDiagnosticsCsvExporter
                 match.ReviewReasons.Select(reason =>
                     reason.ToString()));
 
-            csv.WriteField(shopify.Sku);
-            csv.WriteField(shopify.Title);
-            csv.WriteField(shopify.Location);
-            csv.WriteField(match.LightspeedItem?.PartNumber);
+            csv.WriteField(CsvTextSafety.Protect(shopify.Sku));
+            csv.WriteField(CsvTextSafety.Protect(shopify.Title));
+            csv.WriteField(CsvTextSafety.Protect(shopify.Location));
+            csv.WriteField(CsvTextSafety.Protect(match.LightspeedItem?.PartNumber));
             csv.WriteField(match.MatchType.ToString());
             csv.WriteField(shopify.CurrentQuantity);
 
@@ -112,7 +112,7 @@ public class ReconciliationDiagnosticsCsvExporter
                         CultureInfo.InvariantCulture)
                     : string.Empty);
 
-            csv.WriteField(contributorSummary);
+            csv.WriteField(CsvTextSafety.Protect(contributorSummary));
             csv.WriteField(reviewReasons);
 
             csv.NextRecord();

@@ -14,6 +14,7 @@ public class ShopifyInventoryCsvExporterTests
         {
             new()
             {
+                ExportIdentity = new ShopifyVariantIdentity("klim-001", "Title", "Default Title", "", "", "", "", "KLIM-001", "KLIM Adventure Jacket", "Ottawa"),
                 Sku = "KLIM-001",
                 Title = "KLIM Adventure Jacket",
                 Location = "Ottawa",

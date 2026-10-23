@@ -63,6 +63,7 @@ async function expectCleared(page: Page) {
     await navigate(page, 'Reconciliation');
     await expect(page.getByRole('heading', {name: 'Reconciliation Results', exact: true})).toHaveCount(0);
     await expect(page.getByRole('button', {name: 'Download Diagnostics CSV', exact: true})).toHaveCount(0);
+    await expect(page.getByRole('button', {name: 'Download Approved Shopify CSV', exact: true})).toHaveCount(0);
     await expect(page.getByRole('button', {name: 'Run Reconciliation', exact: true})).toBeDisabled();
 }
 
@@ -136,6 +137,7 @@ test('successful mapping creation clears old approvals while a failed creation p
     await navigate(page, 'Reconciliation');
     await expect(page.getByRole('heading', {name: 'Reconciliation Results', exact: true})).toBeVisible();
     await expect(page.getByRole('button', {name: 'Download Diagnostics CSV', exact: true})).toBeVisible();
+    await expect(page.getByRole('button', {name: 'Download Approved Shopify CSV', exact: true})).toBeEnabled();
     await page.getByRole('combobox', {name: 'Filter inventory matches'}).selectOption('approved');
     await expect(page.getByRole('row').filter({hasText: inventory.shopifySku}).getByRole('cell').nth(5)).toHaveText('3');
 

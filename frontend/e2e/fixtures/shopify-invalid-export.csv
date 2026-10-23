@@ -1,0 +1,3 @@
+Handle,Title,Option1 Name,Option1 Value,Option2 Name,Option2 Value,Option3 Name,Option3 Value,SKU,Location,On hand (current),On hand (new)
+bad-a,First product,Title,Default Title,,,,,{{CASE}}-BAD-A,Ottawa East,2,
+{{SECOND_HANDLE}},{{BAD_TITLE}},Title,{{BAD_VALUE}},,,,,{{CASE}}-BAD-B,Ottawa East,2,

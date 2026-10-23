@@ -36,6 +36,7 @@ public static class ReconciliationEndpoints
                 ReconciliationHistoryRepository historyRepository,
                 SkuMappingRepository skuMappingRepository,
                 ReconciliationDiagnosticsCsvExporter diagnosticsExporter,
+                ShopifyInventoryCsvExporter shopifyExporter,
                 bool detailed = false,
                 string? format = null) =>
             {
@@ -142,7 +143,8 @@ public static class ReconciliationEndpoints
                     if (detailed)
                     {
                         var detailedResponse =
-                            ReconciliationDetailedResponse.FromResult(result);
+                            ReconciliationDetailedResponse.FromResult(result,
+                                ApprovedInventoryExportResponse.FromResult(result, shopifyExporter));
 
                         return Results.Ok(detailedResponse);
                     }

@@ -26,12 +26,24 @@ public class ShopifyCsvImporter
         csv.Read();
         csv.ReadHeader();
 
+        var headers = csv.HeaderRecord ?? [];
+        if (headers.Distinct(StringComparer.OrdinalIgnoreCase).Count() != headers.Length)
+            throw new FormatException("Duplicate Shopify CSV headers are ambiguous.");
+
+        string? Optional(string name, string? alternative = null)
+        {
+            var present = headers.Where(header => header == name || header == alternative).ToList();
+            if (present.Count > 1)
+                throw new FormatException($"Ambiguous Shopify CSV column '{name}'.");
+            return present.Count == 0 ? null : csv.GetField(present[0]);
+        }
+
         while (csv.Read())
         {
             var sku = csv.GetField("SKU");
 
             if (string.IsNullOrWhiteSpace(sku))
-                continue;
+                throw new FormatException($"A Shopify SKU is required at CSV row {csv.Parser.Row}.");
 
             var quantityText = csv.GetField("On hand (current)");
 
@@ -48,8 +60,19 @@ public class ShopifyCsvImporter
 
             records.Add(new ShopifyInventoryItem
             {
+                ExportIdentity = new ShopifyVariantIdentity(
+                    Optional("Handle") ?? string.Empty,
+                    Optional("Option1 Name", "Option 1 Name") ?? string.Empty,
+                    Optional("Option1 Value", "Option 1 Value") ?? string.Empty,
+                    Optional("Option2 Name", "Option 2 Name") ?? string.Empty,
+                    Optional("Option2 Value", "Option 2 Value"),
+                    Optional("Option3 Name", "Option 3 Name") ?? string.Empty,
+                    Optional("Option3 Value", "Option 3 Value"),
+                    sku,
+                    Optional("Title") ?? string.Empty,
+                    csv.GetField("Location") ?? string.Empty),
                 Sku = sku.Trim(),
-                Title = csv.GetField("Title")?.Trim()
+                Title = Optional("Title")?.Trim()
                         ?? string.Empty,
                 Location = csv.GetField("Location")?.Trim()
                            ?? string.Empty,

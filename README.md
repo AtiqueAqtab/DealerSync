@@ -46,6 +46,69 @@ The core features are implemented. Final end-to-end acceptance and release prepa
 
 The full plan contains 15 milestones, from v0.1.0 through the exploratory v4.0.0 Lightspeed integration. See [docs/ROADMAP.md](docs/ROADMAP.md) for scope, status, dependencies, and remaining v0.3.0 work. Read [AGENTS.md](AGENTS.md) before contributing or starting an agent-assisted task.
 
+## Approved Shopify inventory CSVs
+
+The web reconciliation page has separate **Download Diagnostics CSV** and **Download Approved Shopify CSV** controls.
+Diagnostics are for review and must not be imported into Shopify. The approved file contains all updates approved by the
+backend for that reconciliation, regardless of the table's search, page, or filter. It does not perform Shopify API calls.
+
+Use Shopify's **All states** inventory export for one location. Keep the source `Handle`, `SKU`, `Location`,
+`On hand (current)`, and every applicable option value. Unused second and third options may have blank or absent columns.
+Optional titles and option names are retained when present. Both `Option1 Value` and `Option 1 Value` header styles are accepted, with the
+same aliases for names and options 2 and 3. Do not include both aliases for the same field.
+
+A default variant must already contain its source `Default Title` value. A variant with two or three options must retain
+each applicable value. DealerSync does not create handles, infer option values, or treat SKU alone as Shopify's variant
+identity. Every retained row needs a nonblank SKU; duplicate SKUs, duplicate headers, and conflicting assignments are
+rejected. Integer quantities are required; fractional, blank, out-of-range, and `Not stocked` quantities are unsupported.
+
+The download uses this supported All states update subset:
+
+```text
+Handle,Title,Option 1 Name,Option 1 Value,Option 2 Name,Option 2 Value,Option 3 Name,Option 3 Value,SKU,Location,On hand (current),On hand (new)
+```
+
+It preserves exact source identity, title, SKU, and location, writes the original current stock, and puts only the
+backend-approved quantity in `On hand (new)`, including an approved `0`. Optional fields such as HS code, country of
+origin, bin name, and read-only stock states are omitted rather than written blank. This file updates inventory, not
+product details. Matching still normalizes surrounding whitespace; the download retains the original source strings.
+
+Shopify uses the current/new quantity pair to check for stock changes since export. Do not clear `On hand (current)`
+or copy calculated quantities into the file. Review the complete download before manually importing it. See
+[Shopify's inventory CSV requirements](https://help.shopify.com/en/manual/inventory-and-locations/setup/inventory-csv).
+These checks follow that documented contract; no live-store import has been performed or authorized.
+
+Header review (2026-10-23): output uses the spaced `Option 1 Name` / `Option 1 Value` style for all three options,
+matching the detailed column table in the linked Shopify documentation. Its required-fields summary instead uses
+`Option1 Value`. The [official template](https://help.shopify.com/cdn/shopifycloud/product-knowledge/production/csv/inventory_template.csv)
+returned HTTP 403 during verification, so its header spelling could not be checked. The detailed table is the most
+defensible output reference available; the documentation inconsistency remains unresolved. Both input spellings remain
+accepted. A real Shopify import test is still needed to establish live import compatibility.
+
+The export policy is all-or-nothing. If any retained source identity is incomplete, contains an option gap, duplicates
+another product/variant/location identity, or differs only by ambiguous identity casing, the whole download is blocked
+with a visible reason. This includes identity checks on rows whose quantities were excluded. Diagnostics and approval
+counts remain available, but no partial inventory file is advertised. Minimal older CSVs can still produce diagnostics
+when their required reconciliation fields are present; without complete export identity they cannot produce an update
+download. The file is also blocked if it exceeds Shopify's 15 MB limit. Keep the source export unmodified: without
+contacting Shopify, DealerSync cannot detect option metadata removed from both its name and value columns.
+
+Backend-generated diagnostics escape formula-like text for spreadsheet review. For the Shopify import file,
+formula-like source text blocks export instead of adding an apostrophe that could change an identifier or option value.
+This conservative policy can block legitimate text beginning with `=`, `+`, `-`, or `@`, including after whitespace.
+Review such input; do not bypass the warning by treating diagnostics as an import file. Spreadsheet applications can
+also reformat identifiers, so retain an untouched download and avoid saving a reformatted copy over it.
+
+The detailed API response includes `approvedInventoryExport` with the server-generated `csv`, an optional `error`, and
+the approved `updateCount`. If export validation fails, `csv` is null and the count still describes eligible updates,
+not a partial exported file. With zero approved updates, CSV is null without an export error. React downloads the
+backend's result snapshot; it never regenerates approval from combined inventory. Mapping changes and file changes
+clear that snapshot. Leaving the reconciliation page cancels its pending browser request and discards a late response.
+This does not provide cross-tab mapping synchronization or cancel already-running backend work.
+
+The standalone CLI does **not** load saved PostgreSQL mappings. Its output is not equivalent to the mapping-aware web
+workflow, even when it has enough metadata to write a CSV. Use the web workflow for approved multi-supplier exports.
+
 ## Why I Built It
 
 At work, Lightspeed EVO is our main inventory management system, while Shopify handles the online store.

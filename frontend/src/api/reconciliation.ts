@@ -12,7 +12,8 @@ export function getReconciliationHistory(): Promise<ReconciliationRun[]> {
 
 export async function runReconciliation(
     lightspeedFile: File,
-    shopifyFile: File
+    shopifyFile: File,
+    signal?: AbortSignal,
 ): Promise<ReconciliationDetailedResponse> {
     const formData = new FormData();
 
@@ -24,6 +25,7 @@ export async function runReconciliation(
         {
             method: "POST",
             body: formData,
+            signal,
         }
     );
 

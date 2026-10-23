@@ -2,6 +2,8 @@ namespace DealerSync.Core.Models;
 
 public class InventoryUpdate
 {
+    public ShopifyVariantIdentity? ExportIdentity { get; set; }
+
     public string Sku { get; set; } = string.Empty;
 
     public string Title { get; set; } = string.Empty;

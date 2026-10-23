@@ -28,6 +28,7 @@ builder.Services.AddTransient<ReconciliationService>();
 builder.Services.AddScoped<ReconciliationHistoryRepository>();
 builder.Services.AddScoped<SkuMappingRepository>();
 builder.Services.AddTransient<ReconciliationDiagnosticsCsvExporter>();
+builder.Services.AddTransient<ShopifyInventoryCsvExporter>();
 
 var app = builder.Build();
 

@@ -4,11 +4,13 @@ namespace DealerSync.Api.DTOs;
 
 public record ReconciliationDetailedResponse(
     ReconciliationSummaryResponse Summary,
-    List<ReconciliationMatchResponse> Matches
+    List<ReconciliationMatchResponse> Matches,
+    ApprovedInventoryExportResponse ApprovedInventoryExport
 )
 {
     public static ReconciliationDetailedResponse FromResult(
-        ReconciliationResult result)
+        ReconciliationResult result,
+        ApprovedInventoryExportResponse approvedInventoryExport)
     {
         // Index approved updates by Shopify SKU and location.
         var approvedUpdates = result.InventoryUpdates
@@ -40,7 +42,8 @@ public record ReconciliationDetailedResponse(
 
         return new ReconciliationDetailedResponse(
             Summary: ReconciliationSummaryResponse.FromResult(result),
-            Matches: matches
+            Matches: matches,
+            ApprovedInventoryExport: approvedInventoryExport
         );
     }
 }

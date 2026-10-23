@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {useReconciliation} from "../../hooks/useReconciliation";
 import {FileSpreadsheet, Upload} from "lucide-react";
 import {runReconciliation} from "../../api/reconciliation";
@@ -14,6 +14,8 @@ export default function ReconciliationPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const {result, setResult} = useReconciliation();
+    const request = useRef<AbortController | null>(null);
+    useEffect(() => () => request.current?.abort(), []);
 
     const validateFile = (file: File): boolean => {
         const maxSize = 10 * 1024 * 1024;
@@ -71,21 +73,26 @@ export default function ReconciliationPage() {
         setError(null);
         setResult(null);
 
+        const controller = new AbortController();
+        request.current = controller;
         try {
             const response = await runReconciliation(
                 lightspeedFile,
-                shopifyFile
+                shopifyFile,
+                controller.signal,
             );
 
-            setResult(response);
+            if (!controller.signal.aborted) setResult(response);
         } catch (err) {
+            if (controller.signal.aborted) return;
             setError(
                 err instanceof Error
                     ? err.message
                     : "An unexpected error occurred."
             );
         } finally {
-            setIsSubmitting(false);
+            if (!controller.signal.aborted) setIsSubmitting(false);
+            if (request.current === controller) request.current = null;
         }
     };
 
@@ -94,7 +101,15 @@ export default function ReconciliationPage() {
             return;
         }
 
-        const csv = createDiagnosticsCsv(result.matches);
+        downloadCsv(createDiagnosticsCsv(result.matches), "dealersync_diagnostics.csv");
+    };
+
+    const handleDownloadApproved = () => {
+        if (!result?.approvedInventoryExport.csv || isSubmitting) return;
+        downloadCsv(result.approvedInventoryExport.csv, "dealersync_approved_shopify_inventory.csv");
+    };
+
+    const downloadCsv = (csv: string, filename: string) => {
 
         // UTF-8 BOM helps spreadsheet applications recognize the encoding.
         const blob = new Blob(["\uFEFF", csv], {
@@ -105,7 +120,7 @@ export default function ReconciliationPage() {
         const link = document.createElement("a");
 
         link.href = url;
-        link.download = "dealersync_diagnostics.csv";
+        link.download = filename;
 
         document.body.appendChild(link);
         link.click();
@@ -301,6 +316,27 @@ export default function ReconciliationPage() {
                         >
                             <Download size={17}/>
                             Download Diagnostics CSV
+                        </button>
+                    </div>
+                    <div className="mt-6 space-y-3 border-t border-slate-200 pt-5 dark:border-slate-700">
+                        <h3 className="font-semibold text-slate-900 dark:text-white">Approved Shopify inventory updates</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Download all backend-approved updates from this run, regardless of table filters.
+                            Review the file before importing it in Shopify. Original current stock is retained for import validation.
+                        </p>
+                        {result.approvedInventoryExport.error && (
+                            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                                {result.approvedInventoryExport.error} No partial update file was generated.
+                            </p>
+                        )}
+                        {result.approvedInventoryExport.updateCount === 0 && (
+                            <p className="text-sm text-slate-500 dark:text-slate-400">No inventory updates were approved.</p>
+                        )}
+                        <button type="button" onClick={handleDownloadApproved}
+                            disabled={isSubmitting || !result.approvedInventoryExport.csv}
+                            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">
+                            <Download size={17}/>
+                            Download Approved Shopify CSV
                         </button>
                     </div>
                 </section>

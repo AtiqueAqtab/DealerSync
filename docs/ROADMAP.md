@@ -78,6 +78,7 @@ Purpose: let staff reconcile files and verify supplier mappings without manual A
 - [x] Supplier mapping verification from the UI.
 - [x] Multi-supplier quantity aggregation.
 - [x] Supplier contribution diagnostics in results and diagnostics CSVs.
+- [x] Mapping-aware approved Shopify inventory download with preserved variant identity and current-stock validation fields.
 - [x] Inventory safety rules for unverified/missing suppliers, invalid quantities, ambiguous data, and approved-update separation.
 - [ ] Complete end-to-end acceptance: retain the manual workflow checks and add repeatable automated browser coverage for critical paths.
 - [ ] Finish release preparation, documentation, branch review/merge, and an approved `v0.3.0` tag.
@@ -126,16 +127,42 @@ The tests reuse existing CSVs, unique test identifiers, and the disposable datab
 
 Validation passed 14 browser tests, all 104 existing backend tests, the frontend production build with environment-file loading disabled, lint, test TypeScript checks, and `git diff --check`. Cleanup ran after the failing and passing suites; a separate check found no E2E containers or test servers remaining. No Docker volumes were removed.
 
+#### Release milestone 1: Safe Shopify inventory export
+
+The importer retains exact source handles, option values/names, SKU, title, and location separately from normalized
+matching fields. Approved updates carry that identity without changing supplier trust or quantity rules. The API generates
+the complete All states update CSV from the same mapping-aware reconciliation result returned to React. The web page
+offers separate approved-update and diagnostics downloads; table filters cannot change approval or download scope.
+
+Export validation blocks the whole file for incomplete or ambiguous source identity, missing applicable option values,
+formula-like text, inconsistent source data, or excessive size. No identifiers are fabricated or apostrophe-prefixed in
+machine-import files. Backend diagnostics escape formula-like text. Legacy CLI output remains standalone and does not
+load PostgreSQL mappings; it is explicitly excluded from the mapping-aware web workflow.
+
+Five new browser tests cover mixed approved/blocked products, default and multi-option variants, zero, current/new stock,
+actual downloads, invalid identity, and late-response invalidation. The browser cancels/discards pending reconciliation
+responses on navigation so they cannot restore an obsolete export. Existing invalidation tests also check the new
+download. No database migrations, dependencies, external Shopify calls, or live-store imports are part of this milestone.
+Contract verification follows Shopify's published schema and synthetic examples; a live import has not been validated.
+
+Four additional API regression cases confirm that distinct variants sharing a SKU/location are already rejected,
+including case and surrounding-whitespace differences. No production safeguard change was needed.
+
+Validation passed 19 Playwright tests, 143 backend tests, the backend build, frontend production build, lint, test
+TypeScript checks, and whitespace review. The existing 14 browser and 104 backend tests remain included. The test
+container and server processes were cleaned up without removing volumes. These checks do not mark v0.3.0 released or
+finish the remaining setup, upgrade, CI, and release-candidate gates.
+
 #### Remaining v0.3 work
 
-1. Plan loading/failure recovery and complete search/filter/pagination coverage. Decide the History page scope. Upload-to-results, supplier safety, representative quantity validation, approved zero, diagnostic downloads, and mapping creation/verification with same-context stale-result invalidation have real-service coverage.
+1. Review the export milestone and close only release-critical reliability gaps. Check upload recovery and a representative search/filter/pagination walkthrough; do not require every proposed Step 3B scenario. Upload-to-results, supplier safety, quantities, diagnostics, mapping workflows, and approved CSV download have automated coverage.
 2. Run the final backend and frontend checks against the intended release revision. Confirm that fresh-database setup and upgrade instructions include the multi-supplier migration.
 3. Update the README/current-version information and record release notes, known limitations, setup steps, and synthetic test instructions.
 4. Review the pull request, obtain approval to merge and tag, and verify the target environment if deployment is part of this release. Do not infer deployment from a Git push.
 
 Scope decisions: the supplied v0.3 milestone says CSV uploads, not drag-and-drop specifically, and does not explicitly require a dedicated History page. The older README proposed both drag-and-drop and history UI. Confirm whether those older proposals remain release requirements before adding them. Settings is not an agreed v0.3 requirement. A History page can initially show saved summaries without promising historical item-level details.
 
-Suggested next task: agree on a small Step 3B scope for loading/failure recovery or broader search/filter/pagination coverage. Obtain approval before implementation. If the author confirms History is a v0.3 requirement, plan that page as a separate task using the existing summaries API.
+Suggested next task: review and approve the safe-export milestone, then agree on the next minimal release gate for reliability or reproducible setup/CI. Do not begin it without approval. Dedicated History/Settings screens and unrestricted network deployment are outside the local CSV MVP.
 
 ### v0.4.0 — Reliability, Security and Workflow Improvements
 
