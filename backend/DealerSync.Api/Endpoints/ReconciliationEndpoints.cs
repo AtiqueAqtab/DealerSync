@@ -169,7 +169,7 @@ public static class ReconciliationEndpoints
                         Error = ex.Message
                     });
                 }
-                catch (InvalidOperationException)
+                catch (InvalidOperationException ex) when (ex.InnerException is not Npgsql.NpgsqlException)
                 {
                     return Results.BadRequest(new
                     {

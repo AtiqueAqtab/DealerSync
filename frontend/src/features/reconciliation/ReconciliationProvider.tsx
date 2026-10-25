@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useCallback, useRef, useState} from "react";
 
 import {
     ReconciliationContext,
@@ -19,11 +19,18 @@ interface ReconciliationProviderProps {
 export default function ReconciliationProvider({
                                                    children,
                                                }: ReconciliationProviderProps) {
-    const [result, setResult] =
+    const [result, storeResult] =
         useState<ReconciliationDetailedResponse | null>(null);
+    const version = useRef(0);
+    const setResult = useCallback((next: ReconciliationDetailedResponse | null) => {
+        // Invalidation must also reject responses from work started before the change.
+        if (next === null) version.current++;
+        storeResult(next);
+    }, []);
+    const getResultVersion = useCallback(() => version.current, []);
 
     return (
-        <ReconciliationContext.Provider value={{result, setResult}}>
+        <ReconciliationContext.Provider value={{result, setResult, getResultVersion}}>
             {children}
         </ReconciliationContext.Provider>
     );

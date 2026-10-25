@@ -1,8 +1,8 @@
 # Local browser acceptance tests
 
-The first Playwright test uploads two synthetic inventory files through the React reconciliation page. It checks a current Shopify quantity of `2`, a calculated supplier quantity of `7`, and a backend-approved quantity of `7`. The browser talks to the real API and PostgreSQL. No API responses are mocked.
+The first Playwright test uploads two synthetic inventory files through the React reconciliation page. It checks a current Shopify quantity of `2`, a calculated supplier quantity of `7`, and a backend-approved quantity of `7`. The browser talks to the real API and PostgreSQL. Inventory approval assertions use real API responses. The reliability tests separately inject controlled HTTP and network failures at the local browser boundary.
 
-The suite has 19 real-service Chromium tests: the exact-match smoke test, three supplier-safety tests, seven quantity-validation tests, one diagnostics text/export test, two mapping-workflow tests, and five approved-export tests. Broader search/pagination coverage, loading/failure recovery, history, and CI integration remain later tasks in the [roadmap](ROADMAP.md).
+The suite has 24 Chromium tests: the exact-match smoke test, three supplier-safety tests, seven quantity-validation tests, one diagnostics text/export test, two mapping-workflow tests, five approved-export tests, and five reliability tests. History UI and CI integration remain outside this coverage; see the [roadmap](ROADMAP.md).
 
 ## Supplier safety coverage
 
@@ -34,7 +34,7 @@ The four malformed-input browser tests cover each requested error category and b
 
 The negative-supplier case deliberately has a positive total. Its approval must still be null because any negative contributor blocks that product. The current API returns `reviewReasons: []` here: `InvalidQuantity` and `requiresReview: true` carry the warning, while review reasons describe unverified or missing mappings.
 
-Aggregation uses `long` before checking whether the result fits a signed 32-bit inventory quantity. The existing xUnit `Reconciliation_BlockedSupplierWithOverflow_DoesNotFail` covers an overflowing product already blocked by an unverified supplier; it returns null combined and approved quantities. The browser test covers the distinct fully verified path, which rejects the whole upload with HTTP 400. This prevents an unsafe update, though the generic conflicting-data message does not explain the overflow. The frontend also displays API errors as raw JSON text. These are existing error-reporting limitations; Step 2B does not change production behavior.
+Aggregation uses `long` before checking whether the result fits a signed 32-bit inventory quantity. The existing xUnit `Reconciliation_BlockedSupplierWithOverflow_DoesNotFail` covers an overflowing product already blocked by an unverified supplier; it returns null combined and approved quantities. The browser test covers the distinct fully verified path, which rejects the whole upload with HTTP 400. This prevents an unsafe update, though the generic conflicting-data message does not explain the overflow. The frontend displays the API's JSON validation message without the JSON wrapper. Server failures and network errors use safe retry instructions. The generic overflow message remains an error-reporting limitation.
 
 Zero and null have different meanings. An approved zero is an explicit instruction to change stock to zero. Null means the backend generated no update. The API derives `proposedQuantity` from its approved update collection after applying supplier trust, review, quantity, and difference checks. Tests check the response, result cells, Approved Updates filter, and downloaded CSV to ensure the calculated quantity never fills a missing approval.
 
@@ -53,7 +53,71 @@ The stale-creation regression was run before changing production code. After cor
 
 The workflow helpers navigate through sidebar links after the first page load. `uploadInventoryOnPage` selects files without reloading React, while existing tests retain `uploadInventory` and its initial navigation. Reloading would clear the provider and conceal the regression. Assertions inspect empty results before file selection, since selecting a file also clears old results. Network-response waits and retrying UI assertions synchronize the tests; there are no arbitrary delays.
 
-Clearing results after a successful mapping change is conservative: the user must upload again even if another product was changed. This avoids presenting an old approval as current without adding result-version tracking. These tests cover completed requests in one browser context. They do not establish cross-tab invalidation, race handling for in-flight reconciliations, or broad mapping error recovery. They also cannot establish that real-world identifiers describe the same product; staff must confirm that before verification.
+Clearing results after a successful mapping change is conservative: the user must upload again even if another product was changed. This avoids presenting an old approval as current without adding result-version tracking. These initial tests cover completed requests in one browser context. The reliability tests below extend coverage to a mapping saved during reconciliation. Cross-tab invalidation and broad mapping error recovery remain outside coverage. They also cannot establish that real-world identifiers describe the same product; staff must confirm that before verification.
+
+## Milestone 2: recovery, stale results, and local safety
+
+`frontend/e2e/reliability.spec.ts` adds five browser tests using synthetic data:
+
+- Invalid file extensions and empty files clear existing approvals and disable submission. A malformed quantity returns
+  HTTP 400. Correcting the input on the same page clears the error and permits a successful reconciliation.
+- Two failure cases hold an HTTP 503 or a network failure behind a promise. They check loading text, disabled file and
+  submit controls, one submission, no old downloads, safe error messages, and a successful retry with the selected files.
+  Only the failure is injected; the initial approval and retry use the real API and PostgreSQL.
+- A delayed mapping creation overlaps a real reconciliation. The backend first calculates approval 3; the pending
+  supplier then saves and invalidates that result before its response is delivered. The old approval must stay hidden.
+  A fresh request sees the pending supplier and returns null approval. Sidebar navigation preserves React state.
+- A generated dataset has 57 products: 30 approved at quantity 7, 26 unmatched, and one with negative stock. It checks
+  SKU search, Ready/Mapping Required/Requires Review/Approved Updates filters, first and last pages, page reset after
+  search or filter changes, and empty results. Requires Review includes all 26 unmatched products plus the negative
+  product. Even with no visible rows, the approved download still contains exactly the 30 eligible products at quantity 7.
+
+The mapping overlap test failed against Milestone 1: a late response restored approval 3 after successful creation had
+cleared it. The shared provider now increments a version whenever results are invalidated. Reconciliation captures the
+version before sending its request and accepts the response only if that version still matches. A discarded result shows
+an instruction to run again. The existing abort controller still handles navigation; disabled inputs and the submission
+check still prevent overlapping reconciliations. Mapping creation and verification use the same invalidation mechanism.
+The version is held in the existing provider, without another state store or a backend approval change.
+
+The controlled failures also reproduced raw server-body and browser-error display. The reconciliation client now extracts
+JSON validation errors, gives actionable messages for server/network failures, and preserves cancellation handling.
+A synthetic credential marker in the injected HTTP failure must never appear in the alert.
+
+`backend/DealerSync.Tests/Api/DatabaseFailureApiTests.cs` adds seven cases. Three replace the database registration with
+an unreachable loopback test connection and request mappings, history, or reconciliation. They require HTTP 503 without
+approval payloads, driver details, or the synthetic password; captured application logs must also omit that password.
+Two startup cases launch only their own API process in a temporary directory with an allowlisted environment and no
+connection string or a whitespace-only value. Both must fail startup with the missing-configuration message. The test
+terminates its own process on timeout and removes its temporary directory. Two further cases check an untrusted Host
+header and an untrusted Origin. These tests never start or reset a development database.
+
+Database outages previously escaped as exceptions on read endpoints or became a generic reconciliation conflict.
+The API now returns a safe 503 for Npgsql failures, including EF Core wrappers, without logging an extra raw exception.
+Its startup check rejects blank connection strings. The existing inventory-conflict HTTP 400 behavior is preserved.
+The Host-header test reproduced acceptance of an arbitrary hostname; `AllowedHosts` now permits only `localhost`,
+`127.0.0.1`, and `[::1]`. This follows [ASP.NET Core's host-filtering configuration](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel/host-filtering?view=aspnetcore-10.0).
+
+### Local deployment review and limits
+
+PostgreSQL's Compose port remains `127.0.0.1:5433:5432`. API launch profiles bind to `localhost`; the isolated runner
+binds its API, frontend, and temporary PostgreSQL port to `127.0.0.1`. The development frontend retains
+[Vite's default localhost binding and restricted host handling](https://vite.dev/config/server-options).
+There is no permissive API CORS policy. Host filtering does not restrict listening interfaces or provide authentication:
+keep local bindings, avoid `--host 0.0.0.0` and wildcard API URL overrides, and do not publish these services on a network.
+No additional bind-address change is needed for the reviewed defaults. Environment overrides and the running process's
+actual listener must still be checked when setting up a release machine; clean-install instructions remain Milestone 3.
+
+The reviewed code does not enable EF sensitive-data logging or log connection strings. Credential assertions cover the
+synthetic outage paths, not every possible future driver error or operator logging override. Keep database secrets in
+local configuration and do not enable sensitive logging for dealership data. Fixtures and generated records are synthetic;
+no private inventory, development `.env`, external Shopify service, or Docker volume is used by these checks.
+
+Invalidation covers changes acknowledged through this React provider in one browser context. Other tabs, direct API or
+SQL changes, and a server mutation whose response is lost are not tracked globally. Reconcile again after uncertain
+mapping operations. Cancellation does not undo backend processing or historical summaries. `/api/health` remains a
+liveness endpoint and does not establish database readiness. Authentication, network hosting, historical item-level
+snapshots, and live Shopify import validation remain outside this milestone. Supplier trust and the Milestone 1 CSV
+header/quantity contract are unchanged.
 
 ## Fixtures and test isolation
 
@@ -101,7 +165,7 @@ The mapping helper calls the real `POST /api/sku-mappings` endpoint. New mapping
 
 Tests share the runner's disposable database, but do not share identifiers or assume an empty mappings table. Quantity and supplier cases each upload one Shopify product; the text/export case uploads five distinct exact-match products. They can run in any order without claiming another test's inventory or mappings. No per-test deletion or database reset is performed; all records disappear when the runner removes its own container. Keep the existing single-worker configuration for this stage. Step 2A was checked in both the declared and reversed supplier-scenario order.
 
-The shared browser fixture blocks requests outside the isolated frontend origin for all 19 tests. The upload helpers use the real reconciliation page and read the response to its POST; they do not call reconciliation in place of browser interaction. The late-response test routes only the local reconciliation request and forwards it to the real backend before holding delivery.
+The shared browser fixture blocks requests outside the isolated frontend origin for all 24 tests. The upload helpers use the real reconciliation page and read the response to its POST; they do not call reconciliation in place of browser interaction. The late-response test routes only the local reconciliation request and forwards it to the real backend before holding delivery.
 
 Assertions check the backend summary and per-product contract, rendered quantities, contribution part numbers and quantities, and review messages. For blocked products, the detailed response has `proposedQuantity: null` and `inventoryUpdatesGenerated: 0`. Because the input contains one Shopify product, that zero applies to the tested SKU. The response does not expose a separate inventory-update collection. The Approved Updates filter must also hide the blocked row, preventing the calculated value from being presented as an approved update.
 
@@ -148,6 +212,15 @@ The command type-checks the test code and then:
 No normal development server needs to be stopped. The runner does not reuse it, read the development `.env`, load private inventory files, or call Shopify. The browser blocks requests outside its test frontend origin. The CSV fixtures are committed under `frontend/e2e/fixtures/`.
 
 ## Results and failures
+
+Milestone 2 passed all 150 backend tests and 24 Playwright tests, including the 143/19 Milestone 1 baseline. Backend
+build, frontend production build with environment-file loading disabled, ESLint, test TypeScript checks, and Git
+whitespace checks passed. The initial browser run reproduced three production failures (server error display, network
+error display, and stale approval restoration); its fourth failure was an incorrect test expectation that omitted
+unmatched products from Requires Review. Correcting that assertion required no table change. Initial database test
+configuration was corrected before relying on its results; valid regressions then reproduced blank-setting startup,
+unhandled/misclassified database failures, and arbitrary Host acceptance. The focused seven-case suite and full suites
+passed after the fixes. Cleanup checks found no owned test containers or API/frontend test processes remaining.
 
 The safe-export milestone, including the four duplicate-SKU API regression cases, passed 19 browser tests and
 143 backend tests, including the recorded 14/104 baseline. The duplicate-SKU review required no production changes.

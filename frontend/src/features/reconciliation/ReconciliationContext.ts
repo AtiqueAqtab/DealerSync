@@ -7,6 +7,7 @@ import type {
 export interface ReconciliationContextValue {
     result: ReconciliationDetailedResponse | null;
     setResult: (result: ReconciliationDetailedResponse | null) => void;
+    getResultVersion: () => number;
 }
 
 export const ReconciliationContext =

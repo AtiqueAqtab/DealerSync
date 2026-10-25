@@ -13,7 +13,7 @@ export default function ReconciliationPage() {
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const {result, setResult} = useReconciliation();
+    const {result, setResult, getResultVersion} = useReconciliation();
     const request = useRef<AbortController | null>(null);
     useEffect(() => () => request.current?.abort(), []);
 
@@ -73,6 +73,7 @@ export default function ReconciliationPage() {
         setError(null);
         setResult(null);
 
+        const version = getResultVersion();
         const controller = new AbortController();
         request.current = controller;
         try {
@@ -82,7 +83,10 @@ export default function ReconciliationPage() {
                 controller.signal,
             );
 
-            if (!controller.signal.aborted) setResult(response);
+            if (!controller.signal.aborted) {
+                if (version === getResultVersion()) setResult(response);
+                else setError("Reconciliation inputs or mappings changed. Run reconciliation again.");
+            }
         } catch (err) {
             if (controller.signal.aborted) return;
             setError(

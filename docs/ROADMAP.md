@@ -153,16 +153,39 @@ TypeScript checks, and whitespace review. The existing 14 browser and 104 backen
 container and server processes were cleaned up without removing volumes. These checks do not mark v0.3.0 released or
 finish the remaining setup, upgrade, CI, and release-candidate gates.
 
+#### Release milestone 2: Reliability and safety stabilization
+
+Status: implemented and validated locally; awaiting review and commit approval.
+
+Five additional browser tests cover corrected uploads, HTTP/network failure recovery, loading and duplicate-submission
+controls, a mapping saved during an in-flight reconciliation, and search/filter/pagination with 57 synthetic products.
+Existing navigation cancellation, disabled upload inputs, and completed-mapping invalidation remain in place. A reproduced
+race allowed an old approval to return after a new mapping was saved. Shared-state version checking now discards that
+response and asks the user to reconcile again. Server failures no longer display raw response bodies.
+
+Seven backend cases cover missing/blank configuration, safe database-outage responses without credentials or approvals,
+untrusted Host rejection, and lack of CORS permission for an untrusted Origin. The API now returns 503 for database
+failures, rejects blank connection settings at startup, and restricts accepted hosts to loopback names/addresses.
+The reviewed Compose, API launch-profile, Vite, and E2E bindings are local; deployment overrides still need review on
+the release machine. Host filtering and CORS do not provide authentication.
+
+Validation passed 150 backend tests and 24 Playwright tests, backend and frontend builds, lint, TypeScript checks, Git
+whitespace checks, and test-container/process cleanup. No supplier approval rules, CSV contract, dependencies, or
+migrations changed. See [TESTING.md](TESTING.md#milestone-2-recovery-stale-results-and-local-safety) for reproduced defects,
+verified existing behavior, architecture, and limits. Cross-tab/direct-database changes and ambiguous mutation outcomes
+are not tracked by the browser's local version. Health is liveness only; live Shopify import remains unverified.
+Milestones 3 and 4 have not begun.
+
 #### Remaining v0.3 work
 
-1. Review the export milestone and close only release-critical reliability gaps. Check upload recovery and a representative search/filter/pagination walkthrough; do not require every proposed Step 3B scenario. Upload-to-results, supplier safety, quantities, diagnostics, mapping workflows, and approved CSV download have automated coverage.
+1. Review Milestone 2 reliability and local-safety changes. Recovery and a representative search/filter/pagination workflow now have automated coverage; clean-install/upgrade documentation and CI remain Milestone 3.
 2. Run the final backend and frontend checks against the intended release revision. Confirm that fresh-database setup and upgrade instructions include the multi-supplier migration.
 3. Update the README/current-version information and record release notes, known limitations, setup steps, and synthetic test instructions.
 4. Review the pull request, obtain approval to merge and tag, and verify the target environment if deployment is part of this release. Do not infer deployment from a Git push.
 
 Scope decisions: the supplied v0.3 milestone says CSV uploads, not drag-and-drop specifically, and does not explicitly require a dedicated History page. The older README proposed both drag-and-drop and history UI. Confirm whether those older proposals remain release requirements before adding them. Settings is not an agreed v0.3 requirement. A History page can initially show saved summaries without promising historical item-level details.
 
-Suggested next task: review and approve the safe-export milestone, then agree on the next minimal release gate for reliability or reproducible setup/CI. Do not begin it without approval. Dedicated History/Settings screens and unrestricted network deployment are outside the local CSV MVP.
+Suggested next task: review Milestone 2, then agree on Milestone 3 setup/upgrade and CI work. Do not begin it without approval. Dedicated History/Settings screens and unrestricted network deployment are outside the local CSV MVP.
 
 ### v0.4.0 — Reliability, Security and Workflow Improvements
 
