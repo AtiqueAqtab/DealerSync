@@ -458,85 +458,178 @@ Contains unit tests and integration tests for the different parts of the applica
 The integration tests use Testcontainers to start temporary PostgreSQL databases, so they don't modify the development
 database.
 
-## Getting Started
+## Getting started locally
 
-### Requirements
+The supported workflow is a trusted, single-user macOS or Linux workstation. PostgreSQL, the API, and Vite listen on
+loopback. There is no authentication; do not expose them through a public hostname, port forwarding, or wildcard binds.
+Vite serves the local UI; this is not a cloud deployment or packaged desktop release.
 
-- .NET 10 SDK
-- Docker Desktop or another compatible Docker environment
-- EF Core command-line tools
-- Git
+### Tools and installation
 
-### Clone and Build
+Install Git, Docker Desktop (or Docker Engine with Compose v2 on Linux), and these tools:
+
+| Tool | Supported version |
+| --- | --- |
+| .NET SDK | `10.0.401` from `global.json`; later patches in the same feature band are allowed |
+| Node.js | `24.22.1` LTS from `.node-version` |
+| npm | `11.19.1`, bundled with the pinned Node release |
+| EF CLI | `10.0.12`, restored from `.config/dotnet-tools.json` |
+| PostgreSQL | `postgres:17`, started by Docker Compose |
+
+Use a current Compose v2 that supports `up --wait`. With a Node version manager, install/select the version in
+`.node-version` before running npm. The commands below are for a POSIX shell, from the repository root unless stated.
 
 ```bash
 git clone https://github.com/AtiqueAqtab/DealerSync.git
 cd DealerSync
-
+git switch feature/multi-supplier-inventory # Current unreleased v0.3 work
+dotnet --version
+node --version
+npm --version
+dotnet tool restore
+dotnet ef --version
 dotnet restore
 dotnet build
+npm --prefix frontend ci
 ```
 
-### Set Up PostgreSQL
+### Database configuration and startup
 
-DealerSync uses PostgreSQL to store SKU mappings and reconciliation history.
+Create an ignored `.env` at the repository root. Set `POSTGRES_PASSWORD` to a long random local password; do not use
+real dealership credentials or commit this file. Compose reads `.env`; the API uses .NET configuration independently.
 
-A `compose.yaml` file is included for local development.
-
-Create a local `.env` file containing the PostgreSQL password required by the Compose configuration.
-
-The `.env` file should not be committed to Git.
-
-Start the database:
-
-```bash
-docker compose up -d
+```text
+POSTGRES_PASSWORD=REPLACE_WITH_YOUR_LOCAL_RANDOM_PASSWORD
 ```
 
-The current development configuration exposes PostgreSQL on localhost port `5433`.
-
-Next, configure the API connection string using .NET user secrets.
-
-From the repository root:
+For an existing database, retain its existing password. Changing this variable does not change the password stored in
+an initialized PostgreSQL volume. First-time setup is different from upgrading a populated installation.
 
 ```bash
-dotnet user-secrets set \
-  --project backend/DealerSync.Api \
+docker compose up -d --wait postgres
+```
+
+This retains the existing named volume and publishes PostgreSQL only at `127.0.0.1:5433`. Never use `down -v` or delete
+a volume to fix a startup problem. Store the matching API connection string in .NET user secrets, replacing the
+placeholder locally. User secrets are local development storage, not an encrypted production secret manager; avoid
+putting the actual command/password in shared terminal logs or shell history.
+
+```bash
+dotnet user-secrets set --project backend/DealerSync.Api \
   "ConnectionStrings:DefaultConnection" \
-  "Host=localhost;Port=5433;Database=dealersync;Username=dealersync;Password=<your-local-password>"
+  "Host=127.0.0.1;Port=5433;Database=dealersync;Username=dealersync;Password=REPLACE_WITH_YOUR_LOCAL_RANDOM_PASSWORD"
 ```
 
-Replace the password placeholder with your local database password.
+The API requires `ConnectionStrings:DefaultConnection` (or the environment variable
+`ConnectionStrings__DefaultConnection`). Development loads this project's user secrets. Tests use `Testing` and explicit
+temporary connections. Neither the API nor Vite reads the root `.env`; only Compose does. Vite disables `.env` loading
+and proxies relative `/api` requests directly to the local API. No frontend secret or `VITE_*` variable is needed.
 
-### Apply Database Migrations
+### Apply migrations and start the API
 
-Run:
+For an existing database, make and verify a backup before applying migrations; see the upgrade section below.
+The following command uses Development configuration to load user secrets and applies pending migrations forward.
+It also initializes a fresh database schema. Startup itself does not apply migrations.
 
 ```bash
-dotnet ef database update \
-  --project backend/DealerSync.Infrastructure \
+DOTNET_ENVIRONMENT=Development ASPNETCORE_ENVIRONMENT=Development \
+dotnet ef database update --project backend/DealerSync.Infrastructure \
   --startup-project backend/DealerSync.Api
 ```
 
-This creates the database tables needed for SKU mappings and reconciliation history.
-
-### Start the API
+Start the API in one terminal, leaving it running:
 
 ```bash
-dotnet run --project backend/DealerSync.Api
+DOTNET_ENVIRONMENT=Development ASPNETCORE_ENVIRONMENT=Development \
+dotnet run --project backend/DealerSync.Api --no-launch-profile --urls http://127.0.0.1:5233
 ```
 
-ASP.NET Core will print the local address where the API is running.
+This explicit address limits the listener; `AllowedHosts` separately permits `localhost`, `127.0.0.1`, and `[::1]`.
+The existing launch profiles also use loopback, but the command above avoids profile selection and development HTTPS
+certificate requirements. Do not override the listener with `0.0.0.0`, `*`, or a public hostname. No permissive API CORS
+policy is enabled; neither CORS nor Host filtering provides authentication.
 
-### Run the Tests
+Check a database-backed endpoint without printing saved mappings:
 
 ```bash
-dotnet test
+curl --fail --silent --output /dev/null http://127.0.0.1:5233/api/sku-mappings
 ```
 
-Docker needs to be running for the integration tests.
+`/api/health` is liveness only: it can return 200 while PostgreSQL is unavailable. Its legacy version field is not a
+release-readiness signal. Development additionally exposes OpenAPI; Testing does not load development user secrets.
 
-At the end of the v0.2.0 development milestones, DealerSync has **93 passing tests**.
+### Start the frontend and try synthetic inventory
+
+In a second terminal at the repository root:
+
+```bash
+npm --prefix frontend run dev
+```
+
+Open `http://127.0.0.1:5173`, then Reconciliation. Vite binds to that loopback address, fails clearly if port 5173 is busy,
+and proxies `/api` to `http://127.0.0.1:5233`.
+
+Upload `samples/lightspeed_inventory_sample.csv` and `samples/shopify_inventory_sample.csv` in their respective controls.
+These files are synthetic. On a fresh database with no additional mappings for those SKUs, expect four exact matches:
+KLIM-001 goes from 3 to 4, BMW-003 from 4 to 2, TRIUMPH-004 from 1 to approved 0, and REVIT-002 stays at 7 without an update.
+There are three eligible updates. Download **Approved Shopify CSV**, and check its original current quantities and
+backend-approved new quantities, including zero. The separate diagnostics file must not be imported into Shopify.
+This exercise generates a file locally; it does not contact Shopify or establish live import compatibility.
+
+Stop Vite and the API with Ctrl+C in their respective terminals. Stop PostgreSQL without removing its data:
+
+```bash
+docker compose stop postgres
+```
+
+### Populated database upgrades and recovery
+
+The `v0.2.0` tag (`3fdebe75`) includes migrations through
+`20261013024015_AddNormalizedUpdatesExcluded`. Current v0.3 adds
+`20261017023848_AllowMultipleSuppliersPerShopifySku`. It removes uniqueness from the Shopify SKU index, preserving
+case-insensitive Lightspeed uniqueness, required identifiers, and existing mapping data. The automated upgrade test
+uses these actual migrations, not a substitute schema; see [testing](docs/TESTING.md#populated-database-upgrade-and-ci).
+
+Before upgrading a populated local database, stop the API/UI, confirm the intended database/container, and back up to
+ignored local storage. With the reviewed Compose configuration, the database is `dealersync` in its `postgres` service:
+
+```bash
+mkdir -p data/backups
+docker compose exec -T postgres pg_dump -U dealersync -d dealersync -Fc > data/backups/pre-v030.dump
+docker compose exec -T postgres pg_restore --list < data/backups/pre-v030.dump > data/backups/pre-v030.contents.txt
+```
+
+Proceed only if both commands succeed. Listing a dump checks its archive structure; it is not a restore drill. Keep a
+protected copy outside the working directory and test restoration into a separate empty database before relying on a
+backup for important data. Backups can contain private mappings; never commit or upload them as CI artifacts.
+Apply the forward migration command above, restart, and check mappings and a synthetic reconciliation.
+
+Downgrading is unsupported once several suppliers share a Shopify SKU: the old unique index cannot represent those
+rows. Do not run destructive rollback commands or edit migration-history entries. Recovery requires an operator-reviewed
+restore of the pre-upgrade backup into a separate database with the matching application revision, followed by validation
+before changing connections. The automated test does not constitute a backup/restore drill for a real installation.
+
+### Common failures and independent checks
+
+| Symptom | Check/recovery |
+| --- | --- |
+| SDK or `dotnet ef` missing | Install the SDK selected by `global.json`, then run `dotnet tool restore` from the root. |
+| Frontend `package.json` missing | Run the documented `npm --prefix frontend ...` commands from the root. |
+| Database password missing/mismatched | Set the ignored Compose `.env` and matching API secret. Preserve the password for an existing volume. |
+| Missing API connection string | Use the Development commands above; set the local user secret. Testing requires an explicit test connection. |
+| API returns 503 | Check PostgreSQL readiness, connection settings, and applied migrations; do not reset data. |
+| API is alive but frontend fails | Check the database-backed endpoint and API port 5233, then confirm Vite's proxy. |
+| Port already occupied | Identify the existing process; do not kill an unrelated server. For an alternate frontend port, use `npm --prefix frontend run dev -- --port 5174`. |
+| Invalid Host response | Use the supported loopback URL; Host filtering is not fixed by exposing another interface. |
+| HTTP-only API logs missing HTTPS redirect port | Expected for this local HTTP workflow; real requests and readiness checks must still succeed. |
+| Migration fails | Preserve the backup, inspect the error and migration history, resolve its cause, then retry forward migrations. Do not delete volumes or history entries. |
+
+Keep sensitive EF logging disabled, and do not share connection strings or real inventory logs. The legacy CLI does not
+load saved PostgreSQL mappings and is not equivalent to the mapping-aware web workflow.
+
+[docs/TESTING.md](docs/TESTING.md) has the full independent test commands and CI details. Integration/E2E tests use their
+own disposable databases. The current local baseline is 151 backend tests and 24 Playwright tests; GitHub CI must still
+execute successfully before a release candidate is approved.
 
 ## API Endpoints
 

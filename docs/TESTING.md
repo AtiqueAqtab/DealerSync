@@ -2,7 +2,7 @@
 
 The first Playwright test uploads two synthetic inventory files through the React reconciliation page. It checks a current Shopify quantity of `2`, a calculated supplier quantity of `7`, and a backend-approved quantity of `7`. The browser talks to the real API and PostgreSQL. Inventory approval assertions use real API responses. The reliability tests separately inject controlled HTTP and network failures at the local browser boundary.
 
-The suite has 24 Chromium tests: the exact-match smoke test, three supplier-safety tests, seven quantity-validation tests, one diagnostics text/export test, two mapping-workflow tests, five approved-export tests, and five reliability tests. History UI and CI integration remain outside this coverage; see the [roadmap](ROADMAP.md).
+The suite has 24 Chromium tests: the exact-match smoke test, three supplier-safety tests, seven quantity-validation tests, one diagnostics text/export test, two mapping-workflow tests, five approved-export tests, and five reliability tests. History UI remains outside browser coverage; CI wiring is described below and in the [roadmap](ROADMAP.md).
 
 ## Supplier safety coverage
 
@@ -171,8 +171,8 @@ Assertions check the backend summary and per-product contract, rendered quantiti
 
 ## Requirements
 
-- macOS or Linux, with Node.js compatible with the frontend's installed Vite version.
-- .NET 10 SDK and the EF Core CLI. Confirm `dotnet ef --version` works.
+- macOS or Linux, with Node `24.22.1` from `.node-version` (bundled npm `11.19.1`).
+- .NET SDK `10.0.401` (same-feature-band patches allowed by `global.json`). Run `dotnet tool restore` at the root for EF CLI `10.0.12`, then confirm `dotnet ef --version`.
 - A running Docker daemon. The first run may download `postgres:17`.
 - Frontend dependencies and Playwright's Chromium browser.
 
@@ -206,12 +206,96 @@ The command type-checks the test code and then:
 2. Verifies the container label, storage type, and live database name before applying the existing EF migrations. It does not reset a schema or delete records.
 3. Starts a separate API process in the `Testing` environment with an explicit test connection string and a temporary content directory. Development launch profiles and user-secret configuration are not used.
 4. Starts Vite with the existing application plugins and a test-only proxy target. The test configuration disables `.env` file loading. Both servers use automatically selected loopback ports.
-5. Waits for a database-backed request through the frontend proxy, runs 19 Chromium tests, and checks API responses, visible results, and downloaded CSVs.
+5. Waits for a database-backed request through the frontend proxy, runs 24 Chromium tests, and checks API responses, visible results, and downloaded CSVs.
 6. Stops the process groups it started and removes only the container whose identity and ownership label match this run. It does not remove Docker volumes.
 
 No normal development server needs to be stopped. The runner does not reuse it, read the development `.env`, load private inventory files, or call Shopify. The browser blocks requests outside its test frontend origin. The CSV fixtures are committed under `frontend/e2e/fixtures/`.
 
+## Populated database upgrade and CI
+
+`backend/DealerSync.Tests/Persistence/MigrationUpgradeTests.cs` creates a test-owned PostgreSQL 17 container with tmpfs
+storage and a loopback-only random port. It verifies the live database identity, then uses `IMigrator` to apply migrations
+through `20261013024015_AddNormalizedUpdatesExcluded`. This is the actual final migration in tag `v0.2.0`
+(`3fdebe75c3a25c07f4dd9eb2f65c45e8a5b3ce92`). The four historical migration bodies match that tag; no approximate schema
+or `EnsureCreated` shortcut is used.
+
+The test inserts verified and unverified mappings with distinct Shopify SKUs and checks that the old case-insensitive
+Shopify uniqueness constraint rejects a second supplier. `Database.MigrateAsync()` applies the remaining real migration.
+New contexts read back every original ID, identifier, verification state, and timestamp. A second Lightspeed supplier
+can then share a Shopify SKU, including different case. Case-insensitive Lightspeed uniqueness, primary-key uniqueness,
+and non-null identifiers must still reject invalid inserts without changing the three valid rows. Disposal removes
+only this container and its temporary data. The existing API test fixture also binds its database port to loopback.
+
+Run just the populated upgrade test from the root, with Docker running:
+
+```bash
+DOTNET_ENVIRONMENT=Testing ASPNETCORE_ENVIRONMENT=Testing \
+ConnectionStrings__DefaultConnection='Host=127.0.0.1;Port=1;Database=dealersync_tests_unused;Username=test;Password=test' \
+dotnet test --filter 'FullyQualifiedName~MigrationUpgradeTests'
+```
+
+For all independent checks, select the pinned Node version, then run:
+
+```bash
+dotnet tool restore
+dotnet restore
+dotnet build --no-restore
+DOTNET_ENVIRONMENT=Testing ASPNETCORE_ENVIRONMENT=Testing \
+ConnectionStrings__DefaultConnection='Host=127.0.0.1;Port=1;Database=dealersync_tests_unused;Username=test;Password=test' \
+dotnet test --no-build --no-restore --logger 'trx;LogFileName=backend.trx' --results-directory TestResults
+npm --prefix frontend ci
+npm --prefix frontend run build
+npm --prefix frontend run lint
+npm --prefix frontend run test:e2e:types
+# On macOS; on Linux use install --with-deps chromium instead.
+(cd frontend && npx --no-install playwright install chromium)
+npm --prefix frontend run test:e2e
+git diff --check
+docker ps -a --filter label=com.dealersync.e2e.run
+docker ps -a --filter label=com.dealersync.upgrade-test
+docker ps -a --filter label=org.testcontainers=true
+```
+
+The connection above is deliberately unreachable. Existing API fixtures replace it with their own PostgreSQL connection;
+the browser runner creates another independent connection. Do not substitute a dealership or development connection.
+`TestResults/`, browser reports, build output, and local data/backups are ignored by Git.
+
+`.github/workflows/ci.yml` runs this stack on `ubuntu-24.04` for pull requests and pushes to `main`, `develop`, `feature/**`, or
+`codex/**`, with optional manual dispatch. One job restores/builds/tests .NET, uses `npm ci` for the locked frontend,
+builds/lints/type-checks it, installs Chromium with Linux libraries, and runs the existing E2E runner. It does not create
+a second service-container database or test harness. Docker is checked before tests. The runner reserves random loopback
+ports, polls readiness for up to 60 seconds, uses one Chromium worker with zero test retries, and supports Linux/macOS
+process-group cleanup. Its `finally` block handles normal failures and signals. Hard termination can bypass cleanup;
+GitHub-hosted jobs use disposable machines. An always-run read-only check detects remaining labelled test containers or
+test-server processes. No broad Docker cleanup or volume deletion is performed.
+
+Official Actions are pinned to immutable commits with release comments: checkout `v7.0.1`, setup-dotnet `v6.0.0`,
+setup-node `v7.1.0`, and upload-artifact `v7.0.2`. Pins were resolved from their official release tags. The workflow has
+read-only repository permissions, disables persisted checkout credentials and automatic npm caching, and uses no
+repository secrets. It avoids `pull_request_target`. Always-run artifact upload retains backend TRX, browser HTML
+reports, failure traces/screenshots, and the E2E log for seven days. These artifacts contain only synthetic test data;
+never add real exports or connection files to the artifact paths. Dependency and browser downloads still require network
+access. Scheduled dependency/action updates are not part of this milestone.
+
+The [README startup workflow](../README.md#getting-started-locally) was exercised with a disposable database, explicit
+Testing configuration, and the documented fixed API/frontend addresses. Actual listeners were verified at
+`127.0.0.1:5233` and `127.0.0.1:5173`. The normal Vite configuration proxied a browser upload of the root synthetic
+samples; it produced three approved rows and the downloaded CSV matched the backend snapshot. No development `.env`,
+user-secret entry, persistent development volume, or real backup/restore was used for that verification. Development
+user-secret setup is documented separately; operators must verify their own credentials and backup restoration.
+
+Local `actionlint` 1.7.12 and `bash -n` checks pass for the workflow, and its executable build/test commands were run on
+macOS with the pinned Node and SDK. Linux system-library installation, GitHub event/permission behavior, and artifact
+upload still require an actual GitHub-hosted run. Do not describe CI as green until that run succeeds.
+
 ## Results and failures
+
+Milestone 3 passed 151 backend tests (including the populated upgrade regression) and all 24 Playwright tests. Backend
+restore/build, clean frontend install/build, lint, TypeScript, whitespace, workflow syntax/shell parsing, and setup/proxy
+verification passed locally. The backend build has zero warnings. Test-container and process cleanup checks passed.
+The first upgrade run passed with two nullable warnings in the port-binding code; explicit guards removed those warnings
+before the full build. Local workflow validation does not establish a successful GitHub CI run.
+
 
 Milestone 2 passed all 150 backend tests and 24 Playwright tests, including the 143/19 Milestone 1 baseline. Backend
 build, frontend production build with environment-file loading disabled, ESLint, test TypeScript checks, and Git
@@ -249,26 +333,11 @@ Normal success, failures, Ctrl+C, and SIGTERM trigger cleanup. An uncatchable ki
 
 ## Other checks
 
-Keep the existing backend tests and frontend checks:
+Use the root-level command block under [Populated database upgrade and CI](#populated-database-upgrade-and-ci) for the
+complete checks. Backend integration tests create their own PostgreSQL Testcontainers. The browser runner uses a separate
+database because Chromium needs an API listening on a real network port; the xUnit in-process server is not reachable
+from the browser. Build/lint, backend tests, and browser tests establish different behavior. These 24 browser tests do
+not by themselves establish release readiness or live Shopify compatibility.
 
-```bash
-# From the repository root; integration tests require Docker.
-dotnet build
-dotnet test --verbosity normal
-npm --prefix frontend run build
-npm --prefix frontend run lint
-npm --prefix frontend run test:e2e:types
-```
-
-The backend integration tests already create their own PostgreSQL Testcontainers. The browser runner creates a separate database because a browser needs an API listening on a real network port; the xUnit in-process server is not reachable from Chromium.
-
-Backend tests, frontend build/lint, and the browser suite check different behavior. These 19 browser tests do not complete v0.3's full end-to-end acceptance plan.
-
-For a production-build check that also disables environment-file loading, run this from `frontend/`. These values are unused loopback addresses during a build; the command does not start servers.
-
-```bash
-DEALERSYNC_E2E_RUN_ID=build-validation \
-DEALERSYNC_E2E_API_URL=http://127.0.0.1:1 \
-DEALERSYNC_E2E_BASE_URL=http://127.0.0.1:2 \
-npm run build -- --config e2e/vite.config.ts
-```
+The normal `npm --prefix frontend run build` now disables `.env` loading through the shared Vite configuration. E2E-only
+build variables and the test Vite configuration are unnecessary for a production build.

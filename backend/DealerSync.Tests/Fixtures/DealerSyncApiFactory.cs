@@ -18,6 +18,13 @@ public class DealerSyncApiFactory :
             .WithDatabase("dealersync_test")
             .WithUsername("test")
             .WithPassword("test_password")
+            .WithCreateParameterModifier(parameters =>
+            {
+                var bindings = parameters.HostConfig?.PortBindings
+                    ?? throw new InvalidOperationException("Test database port bindings are missing.");
+                foreach (var binding in bindings.Values.SelectMany(value => value))
+                    binding.HostIP = "127.0.0.1";
+            })
             .Build();
 
     public async Task InitializeAsync()

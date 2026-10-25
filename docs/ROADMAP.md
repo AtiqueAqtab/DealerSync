@@ -174,18 +174,46 @@ whitespace checks, and test-container/process cleanup. No supplier approval rule
 migrations changed. See [TESTING.md](TESTING.md#milestone-2-recovery-stale-results-and-local-safety) for reproduced defects,
 verified existing behavior, architecture, and limits. Cross-tab/direct-database changes and ambiguous mutation outcomes
 are not tracked by the browser's local version. Health is liveness only; live Shopify import remains unverified.
-Milestones 3 and 4 have not begun.
+This records Milestone 2 completion; subsequent milestone status is recorded below.
+
+#### Release milestone 3: Reproducible setup, populated upgrades, and CI
+
+Status: implemented and validated locally; awaiting review and commit approval. GitHub CI has not executed this revision.
+
+The README defines one loopback-only workstation workflow, tool versions, configuration, migrations, synthetic browser
+upload/download, stopping without deleting volumes, recovery, and backup/downgrade limits. `global.json`, `.node-version`,
+and the local EF tool manifest select .NET 10.0.401 (same-feature-band patch roll-forward), Node 24.22.1, and EF 10.0.12.
+Vite explicitly binds `127.0.0.1:5173`, fails on a busy port, proxies to `127.0.0.1:5233`, and does not load `.env` files.
+Backend test databases also bind to loopback. No application dependency or migration was upgraded.
+
+A new Testcontainers regression migrates a real v0.2 database, inserts synthetic verified/unverified mappings, applies
+the remaining migration, and verifies all mapping fields survive. It confirms the old Shopify uniqueness constraint,
+new multi-supplier support, and retained identifier/primary-key integrity. The four historical migrations match tag
+`v0.2.0`. This test uses only temporary data and does not test destructive downgrade or a real backup restore.
+
+A SHA-pinned, read-only GitHub Actions job on Ubuntu 24.04 runs backend checks, locked frontend installation/build/lint/
+types, and the existing isolated Chromium runner. It retains synthetic diagnostics and checks cleanup without deleting
+volumes. Actionlint and shell parsing pass locally; a real GitHub run is still required to validate Linux browser library
+installation, workflow events/permissions, artifact upload, and final cleanup on the hosted runner.
+
+Local validation passed 151 backend tests, 24 Playwright tests, backend and frontend builds, clean npm installation,
+lint, TypeScript, whitespace, and cleanup checks using the pinned Node version. A separate temporary-database exercise
+verified the documented API/frontend listeners, normal Vite proxy, root sample reconciliation, and three-row approved
+CSV download. The development database, user-secret entry, and private inventory were not used.
+
+Milestone 4 has not begun. Release-candidate review still needs the actual GitHub CI result, operator backup/restore
+verification for important data, and existing local-only/health/CLI/Shopify compatibility limitations.
 
 #### Remaining v0.3 work
 
-1. Review Milestone 2 reliability and local-safety changes. Recovery and a representative search/filter/pagination workflow now have automated coverage; clean-install/upgrade documentation and CI remain Milestone 3.
+1. Review Milestone 3 setup, populated upgrade, and CI changes. After approved changes are pushed, require an actual passing GitHub-hosted run; the current local checks do not replace it.
 2. Run the final backend and frontend checks against the intended release revision. Confirm that fresh-database setup and upgrade instructions include the multi-supplier migration.
 3. Update the README/current-version information and record release notes, known limitations, setup steps, and synthetic test instructions.
 4. Review the pull request, obtain approval to merge and tag, and verify the target environment if deployment is part of this release. Do not infer deployment from a Git push.
 
 Scope decisions: the supplied v0.3 milestone says CSV uploads, not drag-and-drop specifically, and does not explicitly require a dedicated History page. The older README proposed both drag-and-drop and history UI. Confirm whether those older proposals remain release requirements before adding them. Settings is not an agreed v0.3 requirement. A History page can initially show saved summaries without promising historical item-level details.
 
-Suggested next task: review Milestone 2, then agree on Milestone 3 setup/upgrade and CI work. Do not begin it without approval. Dedicated History/Settings screens and unrestricted network deployment are outside the local CSV MVP.
+Suggested next task: review Milestone 3 and its first GitHub CI result, then agree on Milestone 4 release-candidate work. Do not begin it without approval. Dedicated History/Settings screens and unrestricted network deployment are outside the local CSV MVP.
 
 ### v0.4.0 — Reliability, Security and Workflow Improvements
 
@@ -197,7 +225,7 @@ Purpose: make the dashboard dependable and establish access controls before a de
 - [ ] Improve frontend workflows based on v0.3 findings.
 - [ ] Add authentication and authorization.
 - [ ] Introduce a consistent structured logging approach. Framework logging alone does not complete this work.
-- [ ] Add CI/CD with GitHub Actions.
+- [ ] Extend the v0.3 GitHub Actions CI baseline into an approved deployment workflow.
 - [ ] Measure and improve performance.
 
 Dependencies: a reviewed v0.3 workflow, representative synthetic test data, and decisions about staff roles and deployment.
