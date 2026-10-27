@@ -36,6 +36,7 @@ public static class ReconciliationEndpoints
                 ReconciliationHistoryRepository historyRepository,
                 SkuMappingRepository skuMappingRepository,
                 ReconciliationDiagnosticsCsvExporter diagnosticsExporter,
+                ShopifyInventoryCsvExporter shopifyExporter,
                 bool detailed = false,
                 string? format = null) =>
             {
@@ -87,27 +88,37 @@ public static class ReconciliationEndpoints
                     using var shopifyReader =
                         new StreamReader(shopifyStream);
 
-                    // Retrieve only manually verified SKU mappings
+                    // Retrieve all supplier mappings, including unverified mappings.
                     var savedMappings =
-                        await skuMappingRepository.GetVerifiedAsync();
-                    
-                    // Convert database entities into Core models
-                    var verifiedMappings = savedMappings
+                        await skuMappingRepository.GetAllAsync();
+
+                    // Convert database entities into Core models.
+                    var allMappings = savedMappings
+                        .Select(mapping => new SkuMappingInfo(
+                            mapping.LightspeedPartNumber,
+                            mapping.ShopifySku,
+                            mapping.IsVerified))
+                        .ToList();
+
+                    // Only verified mappings are trusted inventory contributors.
+                    var verifiedMappings = allMappings
+                        .Where(mapping => mapping.IsVerified)
                         .Select(mapping => new VerifiedSkuMapping(
                             mapping.LightspeedPartNumber,
                             mapping.ShopifySku))
                         .ToList();
-                    
-                    // Run reconciliation using verified mappings
+
+                    // Run reconciliation with both trusted and pending mappings.
                     var result = service.Run(
                         lightspeedReader,
                         shopifyReader,
-                        verifiedMappings);
+                        verifiedMappings,
+                        allMappings);
 
                     // Save successful reconciliation results
                     await historyRepository.SaveAsync(result);
 
-// Return downloadable CSV diagnostics
+                    // Return downloadable CSV diagnostics
                     if (string.Equals(
                             format,
                             "csv",
@@ -115,7 +126,10 @@ public static class ReconciliationEndpoints
                     {
                         using var writer = new StringWriter();
 
-                        diagnosticsExporter.Export(writer, result.Matches);
+                        diagnosticsExporter.Export(
+                            writer,
+                            result.Matches,
+                            result.InventoryUpdates);
 
                         var csvBytes = Encoding.UTF8.GetBytes(writer.ToString());
 
@@ -125,16 +139,17 @@ public static class ReconciliationEndpoints
                             fileDownloadName: "dealersync_diagnostics.csv");
                     }
 
-// Return detailed JSON when requested
+                    // Return detailed JSON when requested
                     if (detailed)
                     {
                         var detailedResponse =
-                            ReconciliationDetailedResponse.FromResult(result);
+                            ReconciliationDetailedResponse.FromResult(result,
+                                ApprovedInventoryExportResponse.FromResult(result, shopifyExporter));
 
                         return Results.Ok(detailedResponse);
                     }
 
-// Default: return summary JSON
+                    // Default: return summary JSON
                     var response =
                         ReconciliationSummaryResponse.FromResult(result);
 
@@ -154,7 +169,7 @@ public static class ReconciliationEndpoints
                         Error = ex.Message
                     });
                 }
-                catch (InvalidOperationException)
+                catch (InvalidOperationException ex) when (ex.InnerException is not Npgsql.NpgsqlException)
                 {
                     return Results.BadRequest(new
                     {

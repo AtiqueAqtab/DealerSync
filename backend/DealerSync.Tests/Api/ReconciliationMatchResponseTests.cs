@@ -28,7 +28,18 @@ public class ReconciliationMatchResponseTests
             MatchType = SkuMatchType.Verified
         };
 
-        var response = ReconciliationMatchResponse.FromMatch(match);
+        var approvedUpdate = new InventoryUpdate
+        {
+            Sku = match.ShopifyItem!.Sku,
+            Title = match.ShopifyItem.Title,
+            Location = match.ShopifyItem.Location,
+            CurrentQuantity = match.ShopifyItem.CurrentQuantity,
+            NewQuantity = 10
+        };
+
+        var response = ReconciliationMatchResponse.FromMatch(
+            match,
+            approvedUpdate);
 
         Assert.Equal("BMW-JACKET-123", response.ShopifySku);
         Assert.Equal("BMW-123", response.LightspeedPartNumber);

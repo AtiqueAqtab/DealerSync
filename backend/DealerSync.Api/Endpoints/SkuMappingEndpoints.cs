@@ -78,17 +78,6 @@ public static class SkuMappingEndpoints
                 });
             }
 
-            // Check for existing Shopify mapping
-            var existingShopify =
-                await repository.GetByShopifySkuAsync(shopifySku);
-
-            if (existingShopify is not null)
-            {
-                return Results.Conflict(new
-                {
-                    Error = "This Shopify SKU is already mapped."
-                });
-            }
 
             var mapping = new SkuMapping
             {
@@ -121,7 +110,7 @@ public static class SkuMappingEndpoints
                 });
             }
         });
-        
+
         // PATCH /api/sku-mappings/{id}/verify
         group.MapPatch("/{id:guid}/verify", async (
             Guid id,

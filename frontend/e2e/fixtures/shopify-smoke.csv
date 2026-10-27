@@ -1,0 +1,2 @@
+Handle,Title,Option1 Name,Option1 Value,SKU,Location,On hand (current),On hand (new)
+e2e-smoke,Synthetic smoke test product,Title,Default Title,E2E-SMOKE-001,E2E Test Location,2,

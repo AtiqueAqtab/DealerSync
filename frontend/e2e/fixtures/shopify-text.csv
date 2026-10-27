@@ -1,0 +1,7 @@
+SKU,Title,Location,On hand (current)
+{{CASE}}-TEXT,"Café, ""large""
+second line",E2E Test Location,2
+{{CASE}}-EQUALS,=1+1,E2E Test Location,2
+{{CASE}}-PLUS,+1+1,E2E Test Location,2
+{{CASE}}-MINUS,-1+1,E2E Test Location,2
+{{CASE}}-AT,"@SUM(1,2)",E2E Test Location,2

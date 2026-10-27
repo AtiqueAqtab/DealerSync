@@ -1,0 +1,96 @@
+name: DealerSync CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop, 'feature/**', 'codex/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dealersync-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      DOTNET_ENVIRONMENT: Testing
+      ASPNETCORE_ENVIRONMENT: Testing
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      # Unreachable fallback only. Testcontainers replaces this; E2E generates its own connection.
+      ConnectionStrings__DefaultConnection: Host=127.0.0.1;Port=1;Database=dealersync_tests_unused;Username=test;Password=test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Include the parent so a shallow boundary is not treated as a root commit.
+          fetch-depth: 2
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Verify Docker and restore tools and packages
+        run: |
+          docker info > /dev/null
+          dotnet tool restore
+          dotnet restore
+          npm --prefix frontend ci
+      - name: Build and test backend, including populated migration upgrade
+        run: |
+          dotnet build --no-restore
+          dotnet test --no-build --no-restore --logger 'trx;LogFileName=backend.trx' --results-directory TestResults
+      - name: Build and check frontend
+        run: |
+          npm --prefix frontend run build
+          npm --prefix frontend run lint
+          npm --prefix frontend run test:e2e:types
+      - name: Install Chromium and Linux browser libraries
+        run: |
+          cd frontend
+          npx --no-install playwright install --with-deps chromium
+      - name: Run isolated browser acceptance tests
+        run: |
+          mkdir -p TestResults
+          npm --prefix frontend run test:e2e 2>&1 | tee TestResults/e2e.log
+      - name: Check whitespace
+        run: |
+          base=$(git rev-parse --verify HEAD^)
+          git log -1 --format='Whitespace check commit: %H'
+          printf 'Base (first parent): %s\n' "$base"
+          git diff --check "$base" HEAD
+      - name: Verify test cleanup
+        if: always()
+        run: |
+          # Read-only check: cleanup belongs to the existing runner and Testcontainers.
+          for label in com.dealersync.e2e.run com.dealersync.upgrade-test org.testcontainers=true; do
+            remaining=$(docker ps -aq --filter "label=$label")
+            if [ -n "$remaining" ]; then
+              echo "Test containers remain for $label; inspect cleanup logs."
+              exit 1
+            fi
+          done
+          if pgrep -f '[D]ealerSync.Api.dll --urls http://127.0.0.1|[v]ite/bin/vite.js --config e2e/vite.config.ts'; then
+            echo 'Test server processes remain.'
+            exit 1
+          fi
+      - name: Retain test results and browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dealersync-test-results
+          path: |
+            TestResults/
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
+          if-no-files-found: warn

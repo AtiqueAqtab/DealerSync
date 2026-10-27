@@ -1,0 +1,13 @@
+Handle,Title,Option1 Name,Option1 Value,Option2 Name,Option2 Value,Option3 Name,Option3 Value,SKU,Location,On hand (current),On hand (new)
+synthetic-default,Default product,Title,Default Title,,,,,{{CASE}}-DEFAULT,Ottawa East,2,
+synthetic-one,One option,Size,L,,,,,{{CASE}}-ONE,Ottawa East,2,
+synthetic-two,Two options,Color,Blue,Size,L,,,{{CASE}}-TWO,Ottawa East,2,
+synthetic-three,"  Café, ""summer""
+Original  ",Color,Blue,Size,L,Finish,Matte,{{CASE}}-THREE,Ottawa East,2,
+synthetic-zero,Zero product,Title,Default Title,,,,,{{CASE}}-ZERO,Ottawa East,5,
+synthetic-multi,Verified suppliers,Title,Default Title,,,,,{{CASE}}-SHOPIFY,Ottawa East,2,
+synthetic-pending,Pending supplier,Title,Default Title,,,,,{{CASE}}-PENDING,Ottawa East,2,
+synthetic-missing,Missing supplier,Title,Default Title,,,,,{{CASE}}-MISSING,Ottawa East,2,
+synthetic-negative,Negative supplier,Title,Default Title,,,,,{{CASE}}-NEGATIVE,Ottawa East,2,
+synthetic-normalized,Normalized suggestion,Title,Default Title,,,,,{{CASE}}-NORM-1,Ottawa East,2,
+synthetic-same,Unchanged stock,Title,Default Title,,,,,{{CASE}}-SAME,Ottawa East,2,

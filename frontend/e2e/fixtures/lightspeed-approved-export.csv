@@ -1,0 +1,15 @@
+Part Number,Description,Qty
+{{CASE}}-DEFAULT,Synthetic inventory,7
+{{CASE}}-ONE,Synthetic inventory,8
+{{CASE}}-TWO,Synthetic inventory,9
+{{CASE}}-THREE,Synthetic inventory,10
+{{CASE}}-ZERO,Synthetic inventory,0
+{{CASE}}-PART-A,Synthetic inventory,3
+{{CASE}}-PART-B,Synthetic inventory,4
+{{CASE}}-PENDING-A,Synthetic inventory,3
+{{CASE}}-PENDING-B,Synthetic inventory,4
+{{CASE}}-MISSING-A,Synthetic inventory,3
+{{CASE}}-NEGATIVE-A,Synthetic inventory,7
+{{CASE}}-NEGATIVE-B,Synthetic inventory,-2
+{{CASE}}-NORM1,Synthetic inventory,9
+{{CASE}}-SAME,Synthetic inventory,2

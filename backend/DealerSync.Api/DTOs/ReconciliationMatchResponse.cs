@@ -1,4 +1,3 @@
-using DealerSync.Core.Enums;
 using DealerSync.Core.Models;
 using DealerSync.Core.Services;
 
@@ -14,39 +13,46 @@ public record ReconciliationMatchResponse(
     int? ProposedQuantity,
     bool HasInventoryDifference,
     string DiagnosticStatus,
-    bool RequiresReview
+    bool RequiresReview,
+    int? CombinedQuantity,
+    List<InventoryContributorResponse> Contributors,
+    List<string> ReviewReasons
 )
 {
     public static ReconciliationMatchResponse FromMatch(
-        InventoryMatch match)
+        InventoryMatch match,
+        InventoryUpdate? approvedUpdate = null)
     {
         var shopify = match.ShopifyItem
-                      ?? throw new InvalidOperationException(
-                          "A reconciliation match must contain a Shopify item.");
+            ?? throw new InvalidOperationException(
+                "A reconciliation match must contain a Shopify item.");
 
-        var lightspeed = match.LightspeedItem;
-
-        // Unmatched items require manual review.
-        // Negative source quantities must not be exported.
         var diagnosticService = new InventoryDiagnosticService();
-
         var status = diagnosticService.GetStatus(match);
-        var requiresReview = diagnosticService.RequiresReview(match);
+
+        var contributors = match.Contributors
+            .Select(contributor => new InventoryContributorResponse(
+                contributor.LightspeedItem.PartNumber,
+                contributor.LightspeedItem.Quantity,
+                contributor.MatchType.ToString()))
+            .ToList();
 
         return new ReconciliationMatchResponse(
             ShopifySku: shopify.Sku,
             ShopifyTitle: shopify.Title,
             Location: shopify.Location,
-            LightspeedPartNumber: lightspeed?.PartNumber,
+            LightspeedPartNumber: match.LightspeedItem?.PartNumber,
             MatchType: match.MatchType.ToString(),
             CurrentQuantity: shopify.CurrentQuantity,
-            ProposedQuantity:
-            lightspeed != null && lightspeed.Quantity >= 0
-                ? lightspeed.Quantity
-                : null,
+            ProposedQuantity: approvedUpdate?.NewQuantity,
             HasInventoryDifference: match.HasInventoryDifference,
             DiagnosticStatus: status.ToString(),
-            RequiresReview: requiresReview
+            RequiresReview: diagnosticService.RequiresReview(match),
+            CombinedQuantity: match.CombinedQuantity,
+            Contributors: contributors,
+            ReviewReasons: match.ReviewReasons
+                .Select(reason => reason.ToString())
+                .ToList()
         );
     }
 }

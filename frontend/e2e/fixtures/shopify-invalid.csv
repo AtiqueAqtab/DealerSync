@@ -1,0 +1,2 @@
+SKU,Title,Location,On hand (current)
+{{CASE}}-SHOPIFY,Synthetic invalid quantity,E2E Test Location,{{SHOPIFY_QUANTITY}}

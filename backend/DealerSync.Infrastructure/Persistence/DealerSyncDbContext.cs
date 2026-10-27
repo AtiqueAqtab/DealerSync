@@ -37,13 +37,12 @@ public class DealerSyncDbContext : DbContext
                 .HasMaxLength(255)
                 .HasColumnType("citext");
 
-            // Prevent duplicate Lightspeed part numbers
+            // Each Lightspeed part number maps to one Shopify SKU.
             entity.HasIndex(mapping => mapping.LightspeedPartNumber)
                 .IsUnique();
 
-            // Prevent duplicate Shopify SKUs
-            entity.HasIndex(mapping => mapping.ShopifySku)
-                .IsUnique();
+            // Multiple Lightspeed part numbers may map to one Shopify SKU.
+            entity.HasIndex(mapping => mapping.ShopifySku);
         });
 
         modelBuilder.Entity<ReconciliationRun>(entity =>

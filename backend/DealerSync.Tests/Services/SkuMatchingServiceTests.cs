@@ -752,10 +752,9 @@ public class SkuMatchingServiceTests
     }
 
     [Fact]
-    public void ReconcileShopify_VerifiedMappingConflictsWithExact_Throws()
+    public void ReconcileShopify_ExactAndVerifiedSupplier_CombinesQuantities()
     {
-        var service = new SkuMatchingService();
-
+        // Arrange
         var lightspeed = new[]
         {
             new LightspeedInventoryItem
@@ -785,11 +784,37 @@ public class SkuMatchingServiceTests
             new VerifiedSkuMapping("BMW-456", "BMW-123")
         };
 
-        Assert.Throws<InvalidOperationException>(() =>
-            service.ReconcileShopify(
-                lightspeed,
-                shopify,
-                mappings));
+        var service = new SkuMatchingService();
+
+        // Act
+        var matches = service.ReconcileShopify(
+            lightspeed,
+            shopify,
+            mappings
+        );
+
+        // Assert
+        var match = Assert.Single(matches);
+
+        Assert.Equal(SkuMatchType.Exact, match.MatchType);
+        Assert.Equal(2, match.Contributors.Count);
+
+        Assert.Contains(
+            match.Contributors,
+            contributor =>
+                contributor.LightspeedItem.PartNumber == "BMW-123" &&
+                contributor.MatchType == SkuMatchType.Exact
+        );
+
+        Assert.Contains(
+            match.Contributors,
+            contributor =>
+                contributor.LightspeedItem.PartNumber == "BMW-456" &&
+                contributor.MatchType == SkuMatchType.Verified
+        );
+
+        Assert.Equal(18, match.CombinedQuantity);
+        Assert.True(match.HasInventoryDifference);
     }
 
     [Fact]
@@ -983,6 +1008,183 @@ public class SkuMatchingServiceTests
                 }
             }
         };
+
+        var updates = service.GetInventoryUpdates(matches);
+
+        Assert.Empty(updates);
+    }
+
+    [Fact]
+    public void ReconcileShopify_TwoVerifiedSuppliers_CombinesQuantities()
+    {
+        // Arrange
+        var lightspeedItems = new[]
+        {
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BAT-A",
+                Description = "Motorcycle Battery - Supplier A",
+                Quantity = 5
+            },
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BAT-B",
+                Description = "Motorcycle Battery - Supplier B",
+                Quantity = 3
+            }
+        };
+
+        var shopifyItems = new[]
+        {
+            new ShopifyInventoryItem
+            {
+                Sku = "BATTERY-001",
+                Title = "Motorcycle Battery",
+                Location = "Main",
+                CurrentQuantity = 6
+            }
+        };
+
+        var verifiedMappings = new[]
+        {
+            new VerifiedSkuMapping("BAT-A", "BATTERY-001"),
+            new VerifiedSkuMapping("BAT-B", "BATTERY-001")
+        };
+
+        var service = new SkuMatchingService();
+
+        // Act
+        var matches = service.ReconcileShopify(
+            lightspeedItems,
+            shopifyItems,
+            verifiedMappings
+        );
+
+        // Assert
+        var match = Assert.Single(matches);
+
+        Assert.Equal("BATTERY-001", match.ShopifyItem?.Sku);
+
+        Assert.Equal(SkuMatchType.Verified, match.MatchType);
+
+        // Both Lightspeed part numbers must contribute.
+        Assert.Equal(2, match.Contributors.Count);
+
+        Assert.Contains(
+            match.Contributors,
+            contributor =>
+                contributor.LightspeedItem.PartNumber == "BAT-A" &&
+                contributor.LightspeedItem.Quantity == 5
+        );
+
+        Assert.Contains(
+            match.Contributors,
+            contributor =>
+                contributor.LightspeedItem.PartNumber == "BAT-B" &&
+                contributor.LightspeedItem.Quantity == 3
+        );
+
+        // Combined stock: 5 + 3 = 8
+        Assert.Equal(8, match.CombinedQuantity);
+
+        // Shopify currently has 6 units.
+        Assert.True(match.HasInventoryDifference);
+    }
+
+    [Fact]
+    public void GetInventoryUpdates_TwoVerifiedSuppliers_GeneratesOneCombinedUpdate()
+    {
+        // Arrange
+        var lightspeed = new[]
+        {
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BAT-A",
+                Quantity = 5
+            },
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BAT-B",
+                Quantity = 3
+            }
+        };
+
+        var shopify = new[]
+        {
+            new ShopifyInventoryItem
+            {
+                Sku = "BATTERY-001",
+                Title = "Motorcycle Battery",
+                Location = "Main",
+                CurrentQuantity = 6
+            }
+        };
+
+        var mappings = new[]
+        {
+            new VerifiedSkuMapping("BAT-A", "BATTERY-001"),
+            new VerifiedSkuMapping("BAT-B", "BATTERY-001")
+        };
+
+        var service = new SkuMatchingService();
+
+        // Act
+        var matches = service.ReconcileShopify(
+            lightspeed,
+            shopify,
+            mappings
+        );
+
+        var updates = service.GetInventoryUpdates(matches);
+
+        // Assert
+        var update = Assert.Single(updates);
+
+        Assert.Equal("BATTERY-001", update.Sku);
+        Assert.Equal(6, update.CurrentQuantity);
+        Assert.Equal(8, update.NewQuantity);
+    }
+
+    [Fact]
+    public void GetInventoryUpdates_MultipleSuppliersWithNegativeQuantity_ExcludesUpdate()
+    {
+        var lightspeed = new[]
+        {
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BAT-A",
+                Quantity = 5
+            },
+            new LightspeedInventoryItem
+            {
+                PartNumber = "BAT-B",
+                Quantity = -2
+            }
+        };
+
+        var shopify = new[]
+        {
+            new ShopifyInventoryItem
+            {
+                Sku = "BATTERY-001",
+                Location = "Main",
+                CurrentQuantity = 3
+            }
+        };
+
+        var mappings = new[]
+        {
+            new VerifiedSkuMapping("BAT-A", "BATTERY-001"),
+            new VerifiedSkuMapping("BAT-B", "BATTERY-001")
+        };
+
+        var service = new SkuMatchingService();
+
+        var matches = service.ReconcileShopify(
+            lightspeed,
+            shopify,
+            mappings
+        );
 
         var updates = service.GetInventoryUpdates(matches);
 

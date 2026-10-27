@@ -38,6 +38,7 @@ if (!File.Exists(shopifyFile))
 // ------------------------------------------------------------
 
 Console.WriteLine("Running inventory reconciliation...");
+Console.WriteLine("Standalone CLI: saved database mappings are not loaded. Use the web workflow for mapping-aware approved exports.");
 
 var reconciliationService = new ReconciliationService(
     new LightspeedCsvImporter(),
@@ -175,6 +176,8 @@ static string EscapeCsv(string value)
 {
     if (string.IsNullOrEmpty(value))
         return string.Empty;
+
+    value = CsvTextSafety.Protect(value)!;
 
     if (value.Contains(',') ||
         value.Contains('"') ||
