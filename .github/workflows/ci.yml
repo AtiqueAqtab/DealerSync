@@ -30,6 +30,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Include the parent so a shallow boundary is not treated as a root commit.
+          fetch-depth: 2
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
@@ -61,7 +63,11 @@ jobs:
           mkdir -p TestResults
           npm --prefix frontend run test:e2e 2>&1 | tee TestResults/e2e.log
       - name: Check whitespace
-        run: git show --format= --check HEAD
+        run: |
+          base=$(git rev-parse --verify HEAD^)
+          git log -1 --format='Whitespace check commit: %H'
+          printf 'Base (first parent): %s\n' "$base"
+          git diff --check "$base" HEAD
       - name: Verify test cleanup
         if: always()
         run: |
