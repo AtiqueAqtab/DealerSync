@@ -66,7 +66,7 @@ Evidence: `backend/DealerSync.Api/Endpoints`, `backend/DealerSync.Infrastructure
 
 ### v0.3.0 — React Dashboard and Multi-Supplier Support
 
-Status: core features implemented; final end-to-end acceptance and release preparation remain open.
+Status: release-candidate acceptance passed for `9fb74ea`; final documentation review, merge, and tag approval remain open.
 
 Purpose: let staff reconcile files and verify supplier mappings without manual API calls, including products supplied by more than one Lightspeed part number.
 
@@ -80,7 +80,7 @@ Purpose: let staff reconcile files and verify supplier mappings without manual A
 - [x] Supplier contribution diagnostics in results and diagnostics CSVs.
 - [x] Mapping-aware approved Shopify inventory download with preserved variant identity and current-stock validation fields.
 - [x] Inventory safety rules for unverified/missing suppliers, invalid quantities, ambiguous data, and approved-update separation.
-- [ ] Complete end-to-end acceptance: retain the manual workflow checks and add repeatable automated browser coverage for critical paths.
+- [x] Complete scoped local end-to-end acceptance: fresh clone, synthetic browser workflow, 24 automated browser tests, populated upgrade, and isolated backup/restore drill.
 - [ ] Finish release preparation, documentation, branch review/merge, and an approved `v0.3.0` tag.
 
 Dependencies: v0.2 API/persistence, the `AllowMultipleSuppliersPerShopifySku` migration, and consistent API/frontend contracts. The developer reported successfully applying the migration locally; other environments must be checked separately.
@@ -93,7 +93,7 @@ Evidence: `frontend/src/features/dashboard`, `frontend/src/features/reconciliati
 
 The first browser test now runs one exact-match reconciliation against a separate API and disposable PostgreSQL container. It verifies current quantity `2`, calculated quantity `7`, and approved quantity `7`. The smoke test, its TypeScript check, frontend build/lint, and all 104 existing backend tests passed during implementation. SIGTERM cleanup was also checked, and no E2E runner containers remained afterward.
 
-Step 1 established the environment and exact-match smoke test. Steps 2A, 2B, and 3A cover supplier safety, quantity validation, diagnostic downloads, and mapping creation/verification workflows as described below. Broader UI behavior and CI remain pending. See [TESTING.md](TESTING.md) for local commands and isolation details. The baseline inventory above describes the repository before this infrastructure was added.
+Step 1 established the environment and exact-match smoke test. Steps 2A, 2B, and 3A cover supplier safety, quantity validation, diagnostic downloads, and mapping creation/verification workflows as described below. Later milestones below record broader UI behavior and completed CI. See [TESTING.md](TESTING.md) for local commands and isolation details. The baseline inventory above describes the repository before this infrastructure was added.
 
 #### Playwright Step 2A: Multi-supplier inventory safety
 
@@ -155,7 +155,7 @@ finish the remaining setup, upgrade, CI, and release-candidate gates.
 
 #### Release milestone 2: Reliability and safety stabilization
 
-Status: implemented and validated locally; awaiting review and commit approval.
+Status: complete, committed and pushed as `2f093ca`.
 
 Five additional browser tests cover corrected uploads, HTTP/network failure recovery, loading and duplicate-submission
 controls, a mapping saved during an in-flight reconciliation, and search/filter/pagination with 57 synthetic products.
@@ -178,7 +178,7 @@ This records Milestone 2 completion; subsequent milestone status is recorded bel
 
 #### Release milestone 3: Reproducible setup, populated upgrades, and CI
 
-Status: implemented and validated locally; awaiting review and commit approval. GitHub CI has not executed this revision.
+Status: complete, committed and pushed as `4b67ae2`, with the shallow-history whitespace correction in `9fb74ea`. CI passed for `9fb74ea`.
 
 The README defines one loopback-only workstation workflow, tool versions, configuration, migrations, synthetic browser
 upload/download, stopping without deleting volumes, recovery, and backup/downgrade limits. `global.json`, `.node-version`,
@@ -193,27 +193,50 @@ new multi-supplier support, and retained identifier/primary-key integrity. The f
 
 A SHA-pinned, read-only GitHub Actions job on Ubuntu 24.04 runs backend checks, locked frontend installation/build/lint/
 types, and the existing isolated Chromium runner. It retains synthetic diagnostics and checks cleanup without deleting
-volumes. Actionlint and shell parsing pass locally; a real GitHub run is still required to validate Linux browser library
-installation, workflow events/permissions, artifact upload, and final cleanup on the hosted runner.
+volumes. Actionlint and shell parsing pass locally.
+[GitHub run 40578983483](https://github.com/AtiqueAqtab/DealerSync/actions/runs/40578983483) independently passed Linux
+browser installation, application checks, the corrected whitespace step, cleanup, and artifact upload for `9fb74ea`.
 
 Local validation passed 151 backend tests, 24 Playwright tests, backend and frontend builds, clean npm installation,
 lint, TypeScript, whitespace, and cleanup checks using the pinned Node version. A separate temporary-database exercise
 verified the documented API/frontend listeners, normal Vite proxy, root sample reconciliation, and three-row approved
 CSV download. The development database, user-secret entry, and private inventory were not used.
 
-Milestone 4 has not begun. Release-candidate review still needs the actual GitHub CI result, operator backup/restore
-verification for important data, and existing local-only/health/CLI/Shopify compatibility limitations.
+Milestone 3 is complete. Milestone 4 below records final acceptance; operator recovery for important data and the
+local-only/health/CLI/Shopify limits remain separate from synthetic validation.
+
+#### Release milestone 4: Final release-candidate validation
+
+Status: PASS for the scoped local release candidate at `9fb74ea`, awaiting review of uncommitted release documentation.
+No blocking production defect was found; no feature, dependency, application-code, or migration change was needed.
+
+A fresh temporary HTTPS clone restored the pinned tools and dependencies. Both builds, all 151 backend tests, all 24
+Playwright tests, lint, TypeScript, whitespace, and cleanup checks passed. The backend run included the actual populated
+v0.2 upgrade regression. The exact committed revision also passed GitHub CI on Ubuntu 24.04.5.
+
+A separate temporary Compose deployment verified loopback listeners, the normal Vite proxy, the complete synthetic
+mapping/verification/reconciliation/export workflow, blocked inputs, stale approval clearing, and real API/database
+outage handling. An actual archive/list/restore drill preserved three mappings, seven summaries, and five migration
+records, then generated a fresh approved file through the restored API. No development database, private inventory,
+normal secrets, or persistent volume was used. Supported mapping changes are creation and verification; identifier
+editing/deletion was not invented as part of acceptance.
+
+[RELEASE_READINESS.md](RELEASE_READINESS.md) records PASS/NOT VERIFIED criteria, evidence, commands, known limits, and the
+approval/commit/CI/merge/tag sequence. [RELEASE_NOTES_v0.3.0.md](RELEASE_NOTES_v0.3.0.md) is the proposed release text.
+Live Shopify import remains unverified, invalidation does not synchronize across browser tabs or external changes,
+and authentication/cloud/multi-user operation are outside this release. Real dealership recovery requires its own
+operator-reviewed restore verification. No merge, release, or tag has been created.
 
 #### Remaining v0.3 work
 
-1. Review Milestone 3 setup, populated upgrade, and CI changes. After approved changes are pushed, require an actual passing GitHub-hosted run; the current local checks do not replace it.
-2. Run the final backend and frontend checks against the intended release revision. Confirm that fresh-database setup and upgrade instructions include the multi-supplier migration.
-3. Update the README/current-version information and record release notes, known limitations, setup steps, and synthetic test instructions.
-4. Review the pull request, obtain approval to merge and tag, and verify the target environment if deployment is part of this release. Do not infer deployment from a Git push.
+1. Review the Milestone 4 report, proposed release notes, and every unverified/unsupported criterion.
+2. After approval, commit and push only the reviewed release documentation; require successful CI for that exact SHA.
+3. Review/approve the release PR and require checks on the resulting release commit; repeat affected acceptance if application code changes.
+4. Confirm the intended target commit and absent `v0.3.0` tag, obtain explicit merge/tag/release approval, and follow the report's proposed sequence.
 
 Scope decisions: the supplied v0.3 milestone says CSV uploads, not drag-and-drop specifically, and does not explicitly require a dedicated History page. The older README proposed both drag-and-drop and history UI. Confirm whether those older proposals remain release requirements before adding them. Settings is not an agreed v0.3 requirement. A History page can initially show saved summaries without promising historical item-level details.
 
-Suggested next task: review Milestone 3 and its first GitHub CI result, then agree on Milestone 4 release-candidate work. Do not begin it without approval. Dedicated History/Settings screens and unrestricted network deployment are outside the local CSV MVP.
+Suggested next task: review the final release-candidate report and documentation, then approve specific Git/release actions separately. Passing validation does not authorize them. Dedicated History/Settings screens and unrestricted network deployment are outside the local CSV MVP.
 
 ### v0.4.0 — Reliability, Security and Workflow Improvements
 

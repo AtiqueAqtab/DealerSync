@@ -628,8 +628,11 @@ Keep sensitive EF logging disabled, and do not share connection strings or real 
 load saved PostgreSQL mappings and is not equivalent to the mapping-aware web workflow.
 
 [docs/TESTING.md](docs/TESTING.md) has the full independent test commands and CI details. Integration/E2E tests use their
-own disposable databases. The current local baseline is 151 backend tests and 24 Playwright tests; GitHub CI must still
-execute successfully before a release candidate is approved.
+own disposable databases. Revision `9fb74ea` passed 151 backend tests and 24 Playwright tests locally and in
+[GitHub CI on Ubuntu 24.04](https://github.com/AtiqueAqtab/DealerSync/actions/runs/40578983483).
+The [release-candidate report](docs/RELEASE_READINESS.md) records fresh-clone acceptance, a synthetic backup/restore drill,
+remaining limits, and approval gates. [Proposed v0.3.0 release notes](docs/RELEASE_NOTES_v0.3.0.md) are ready for review;
+no `v0.3.0` release or tag has been created.
 
 ## API Endpoints
 
@@ -815,21 +818,15 @@ The earlier dashboard plan included drag-and-drop uploads and a dedicated Histor
 - [x] Automated PostgreSQL integration tests
 - [ ] Final release
 
-### v0.3.0 — Web Dashboard
+### v0.3.0 — Web dashboard release candidate
 
-For the next version, I want to build a frontend so the reconciliation process can be managed without using the terminal
-or making API requests manually.
+The implemented dashboard supports CSV file selection/upload, reconciliation summaries, searchable and paginated
+inventory results, diagnostic/Approved Updates filters, supplier mapping creation/verification, and separate diagnostic
+and approved inventory downloads. Multiple verified suppliers can contribute to one Shopify SKU.
 
-Some features I'm planning include:
-
-- Drag-and-drop CSV uploads
-- Reconciliation summaries
-- Searchable inventory results
-- Filters for unmatched and flagged products
-- SKU mapping management
-- Manual verification
-- Reconciliation history
-- Downloadable reports
+The dashboard shows recent saved summaries. Dedicated History and Settings routes remain placeholders; drag-and-drop
+is not implemented. Release-candidate acceptance passed for `9fb74ea`, with final documentation review, merge, and tag
+approval still pending. See the [release notes](docs/RELEASE_NOTES_v0.3.0.md) for safety and compatibility limits.
 
 ### Future — Supplier Integration
 

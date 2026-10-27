@@ -284,9 +284,41 @@ samples; it produced three approved rows and the downloaded CSV matched the back
 user-secret entry, persistent development volume, or real backup/restore was used for that verification. Development
 user-secret setup is documented separately; operators must verify their own credentials and backup restoration.
 
-Local `actionlint` 1.7.12 and `bash -n` checks pass for the workflow, and its executable build/test commands were run on
-macOS with the pinned Node and SDK. Linux system-library installation, GitHub event/permission behavior, and artifact
-upload still require an actual GitHub-hosted run. Do not describe CI as green until that run succeeds.
+Local `actionlint` 1.7.12 and `bash -n` checks passed during Milestone 3. Subsequent
+[CI run 40578983483](https://github.com/AtiqueAqtab/DealerSync/actions/runs/40578983483) passed on Ubuntu 24.04.5 for
+`9fb74eae4f300b1a95a5e826af2cf818c7f3e320`, including Linux browser setup, 151 backend tests, 24 browser tests, the
+first-parent whitespace check, cleanup, and artifact upload. Checkout fetches two history levels so `HEAD^` exists;
+the explicit first-parent comparison avoids treating a shallow boundary as a new root. This green result applies to
+that committed SHA, not future documentation or merge revisions.
+
+## Final release-candidate acceptance
+
+Milestone 4 validated a fresh HTTPS clone of `9fb74ea` with SDK 10.0.401, EF tool 10.0.12, Node 24.22.1, and npm
+11.19.1. All 151 backend tests (including the real populated v0.2 upgrade) and 24 Playwright tests passed. Backend and
+frontend builds, clean dependency installation, lint, and TypeScript passed; the clone remained clean after ignored
+artifacts were generated. The Linux CI SHA above is independently verified; its SDK 10.0.403 is allowed by the pinned
+same-feature-band patch roll-forward policy.
+
+An additional one-off browser exercise used the normal Vite configuration and fixed API/frontend ports against a
+uniquely owned Compose container with tmpfs storage and a random loopback PostgreSQL port. Real React controls created
+and verified suppliers, blocked an unverified relationship, approved combined 7 and zero, excluded negative stock,
+invalidated earlier approvals, and generated a fresh export after verification changed. The download's exact identity,
+location, current/new values, BOM, and headers were checked. Case/whitespace duplicate SKU, invalid quantity, and
+formula-like identity inputs could not offer unsafe exports. No external browser requests or Shopify operations occurred.
+
+The README's archive commands were exercised against that disposable deployment. A new empty restore database received
+the archive with `pg_restore --exit-on-error`; all three mappings, seven summaries, and five migration records matched
+exactly. The API restarted against the restored database and produced a fresh safe export. Real API stop/restart and
+owned-database stop also confirmed safe failure behavior. All resources owned by this invocation were cleaned up without removing existing persistent volumes.
+A separate E2E container created on October 25 was left untouched; the report records its identity and cleanup scope. No existing development database or user secrets were used.
+
+No blocking production defect was found. A Node fetch Host-header probe was corrected to raw HTTP after a local control
+confirmed the intended header was not sent by fetch; no application fix was justified. Documentation corrections cover
+stale planned-feature/CI statements and the distinction between tested local acceptance and an approved public release.
+See [RELEASE_READINESS.md](RELEASE_READINESS.md) for the criterion matrix, evidence scope, exact commands, and checklist.
+Live Shopify import, cross-context invalidation, real dealership recovery, and fresh-workstation user-secret entry remain
+unverified or unsupported as explicitly recorded there. The acceptance exercise did not add another committed test
+framework or change the 151/24 suite baseline.
 
 ## Results and failures
 
