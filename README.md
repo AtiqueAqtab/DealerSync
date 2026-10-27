@@ -795,7 +795,8 @@ The complete plan is maintained in [docs/ROADMAP.md](docs/ROADMAP.md). The summa
 
 v0.3.0 is the latest stable release. The v0.1.0 and v0.2.0 summaries below are historical; the unchecked v0.2 final-release item is retained from the earlier plan.
 
-The earlier dashboard plan included drag-and-drop uploads and a dedicated History page. The supplied v0.3.0 milestone requires CSV uploads but does not explicitly include those two features. Confirm their release scope before adding them. Current uploads use file selection, and the dashboard shows recent saved summaries.
+The original dashboard plan also included drag-and-drop uploads and a dedicated History page. These features were not
+included in v0.3.0. The current dashboard uses file selection and displays recent reconciliation summaries.
 
 ### v0.1.0 — CSV Reconciliation MVP
 
