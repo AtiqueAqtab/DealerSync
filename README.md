@@ -13,16 +13,21 @@ I started DealerSync to automate the repetitive parts of that process without as
 The application compares inventory exports, identifies SKU relationships, finds quantity differences, and generates
 reports that can be reviewed before making changes to Shopify.
 
-## Latest Tagged Version
+## Latest stable release
+
+[v0.3.0](https://github.com/AtiqueAqtab/DealerSync/releases/tag/v0.3.0) is the latest stable release, published from
+commit `7b1d800`. See the [v0.3.0 release notes](docs/RELEASE_NOTES_v0.3.0.md) for delivered features and known limitations.
+
+## Previous release
 
 ### v0.2.0 — Reconciliation API and Saved SKU Mappings
 
 The original version of DealerSync was a command-line application that compared two CSV files.
 
-Version 0.2.0 builds on that by adding an ASP.NET Core API, PostgreSQL database, and support for manually verified SKU
+Version 0.2.0 built on that by adding an ASP.NET Core API, PostgreSQL database, and support for manually verified SKU
 mappings.
 
-Some of the main features include:
+Some of its main features included:
 
 - Importing Lightspeed EVO 505 inventory reports and Shopify inventory exports
 - Matching SKUs using exact, normalized, and manually verified relationships
@@ -38,13 +43,13 @@ Some of the main features include:
 
 DealerSync still works with CSV imports and exports. Direct Shopify API integration is something I plan to add later.
 
-## Current Development
+## v0.3.0 dashboard
 
-v0.3.0 adds a React/TypeScript dashboard and multi-supplier reconciliation. The current feature branch includes CSV uploads, searchable results, supplier contributions, review warnings, diagnostics downloads, and mapping creation and verification.
+v0.3.0 adds a React/TypeScript dashboard and multi-supplier reconciliation. The release includes CSV uploads, searchable results, supplier contributions, review warnings, diagnostics downloads, and mapping creation and verification.
 
-The core features are implemented. Final end-to-end acceptance and release preparation remain open. The History and Settings routes are placeholders. The API saves run summaries; it does not save historical item-level reconciliation details.
+Release validation is complete for the trusted, single-user local CSV scope. The History and Settings routes are placeholders. The API saves run summaries; it does not save historical item-level reconciliation details.
 
-The full plan contains 15 milestones, from v0.1.0 through the exploratory v4.0.0 Lightspeed integration. See [docs/ROADMAP.md](docs/ROADMAP.md) for scope, status, dependencies, and remaining v0.3.0 work. Read [AGENTS.md](AGENTS.md) before contributing or starting an agent-assisted task.
+The full plan contains 15 milestones, from v0.1.0 through the exploratory v4.0.0 Lightspeed integration. See [docs/ROADMAP.md](docs/ROADMAP.md) for scope, status, dependencies, and planned work. Read [AGENTS.md](AGENTS.md) before contributing or starting an agent-assisted task.
 
 ## Approved Shopify inventory CSVs
 
@@ -482,7 +487,7 @@ Use a current Compose v2 that supports `up --wait`. With a Node version manager,
 ```bash
 git clone https://github.com/AtiqueAqtab/DealerSync.git
 cd DealerSync
-git switch feature/multi-supplier-inventory # Current unreleased v0.3 work
+git switch --detach v0.3.0 # Published stable release
 dotnet --version
 node --version
 npm --version
@@ -630,9 +635,10 @@ load saved PostgreSQL mappings and is not equivalent to the mapping-aware web wo
 [docs/TESTING.md](docs/TESTING.md) has the full independent test commands and CI details. Integration/E2E tests use their
 own disposable databases. Revision `9fb74ea` passed 151 backend tests and 24 Playwright tests locally and in
 [GitHub CI on Ubuntu 24.04](https://github.com/AtiqueAqtab/DealerSync/actions/runs/40578983483).
-The [release-candidate report](docs/RELEASE_READINESS.md) records fresh-clone acceptance, a synthetic backup/restore drill,
-remaining limits, and approval gates. [Proposed v0.3.0 release notes](docs/RELEASE_NOTES_v0.3.0.md) are ready for review;
-no `v0.3.0` release or tag has been created.
+The [release-validation report](docs/RELEASE_READINESS.md) records the pre-release fresh-clone acceptance,
+synthetic backup/restore drill, known limits, and review checklist. See the
+[published v0.3.0 release](https://github.com/AtiqueAqtab/DealerSync/releases/tag/v0.3.0) and
+[release notes](docs/RELEASE_NOTES_v0.3.0.md).
 
 ## API Endpoints
 
@@ -787,7 +793,7 @@ Database credentials are also kept out of source control using environment confi
 
 The complete plan is maintained in [docs/ROADMAP.md](docs/ROADMAP.md). The summary below records the earlier plan. Use the detailed roadmap for current completion status and the expanded 15 milestones.
 
-The local repository has v0.1.0 and v0.2.0 tags. The unchecked v0.2 final-release item below remains open until its intended meaning is confirmed. v0.3.0 is in development.
+v0.3.0 is the latest stable release. The v0.1.0 and v0.2.0 summaries below are historical; the unchecked v0.2 final-release item is retained from the earlier plan.
 
 The earlier dashboard plan included drag-and-drop uploads and a dedicated History page. The supplied v0.3.0 milestone requires CSV uploads but does not explicitly include those two features. Confirm their release scope before adding them. Current uploads use file selection, and the dashboard shows recent saved summaries.
 
@@ -818,15 +824,15 @@ The earlier dashboard plan included drag-and-drop uploads and a dedicated Histor
 - [x] Automated PostgreSQL integration tests
 - [ ] Final release
 
-### v0.3.0 — Web dashboard release candidate
+### v0.3.0 — Web dashboard
 
 The implemented dashboard supports CSV file selection/upload, reconciliation summaries, searchable and paginated
 inventory results, diagnostic/Approved Updates filters, supplier mapping creation/verification, and separate diagnostic
 and approved inventory downloads. Multiple verified suppliers can contribute to one Shopify SKU.
 
 The dashboard shows recent saved summaries. Dedicated History and Settings routes remain placeholders; drag-and-drop
-is not implemented. Release-candidate acceptance passed for `9fb74ea`, with final documentation review, merge, and tag
-approval still pending. See the [release notes](docs/RELEASE_NOTES_v0.3.0.md) for safety and compatibility limits.
+is not implemented. v0.3.0 is published from release commit `7b1d800`. See the
+[release notes](docs/RELEASE_NOTES_v0.3.0.md) for safety and compatibility limits.
 
 ### Future — Supplier Integration
 
